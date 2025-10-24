@@ -1,0 +1,149 @@
+2025-10-24 19:06:25,612 - app - INFO - [app.py:60] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:06:25,612 - app - INFO - [app.py:61] - 📍 Путь: /tgbot
+2025-10-24 19:06:25,612 - app - INFO - [app.py:62] - 🕐 Время: 2025-10-24T19:06:25.612904
+2025-10-24 19:06:25,613 - app - INFO - [app.py:63] - 📡 Метод: GET
+2025-10-24 19:06:25,613 - app - INFO - [app.py:64] - 🌐 Полный URL: http://alicerasp.alwaysdata.net/tgbot
+2025-10-24 19:06:25,613 - app - INFO - [app.py:65] - 👤 IP: 86.110.174.94
+2025-10-24 19:06:25,613 - app - INFO - [app.py:66] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Cache-Control': 'max-age=0', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ru,en;q=0.9', 'X-Real-Ip': '86.110.174.94', 'Via': '1.1 alproxy'}
+2025-10-24 19:06:25,613 - app - INFO - [app.py:67] - 🔍 Аргументы: {}
+2025-10-24 19:06:25,613 - app - INFO - [app.py:79] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:06:25,613 - app - INFO - [app.py:80] - 📊 Статус: 404 NOT FOUND
+2025-10-24 19:06:25,613 - app - INFO - [app.py:81] - 📋 Заголовки ответа: {'Content-Type': 'text/html; charset=utf-8', 'Content-Length': '207'}
+2025-10-24 19:06:25,614 - app - INFO - [app.py:82] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:12:02,590 - app - INFO - [app.py:76] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:12:02,591 - app - INFO - [app.py:77] - 📍 Путь: /
+2025-10-24 19:12:02,591 - app - INFO - [app.py:78] - 🕐 Время: 2025-10-24T19:12:02.591124
+2025-10-24 19:12:02,591 - app - INFO - [app.py:79] - 📡 Метод: GET
+2025-10-24 19:12:02,591 - app - INFO - [app.py:80] - 🌐 Полный URL: http://alicerasp.alwaysdata.net/tgbot/
+2025-10-24 19:12:02,591 - app - INFO - [app.py:81] - 👤 IP: 86.110.174.94
+2025-10-24 19:12:02,591 - app - INFO - [app.py:82] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Cache-Control': 'max-age=0', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ru,en;q=0.9', 'X-Real-Ip': '86.110.174.94', 'Via': '1.1 alproxy'}
+2025-10-24 19:12:02,591 - app - INFO - [app.py:83] - 🔍 Аргументы: {}
+2025-10-24 19:12:02,591 - app - INFO - [app.py:95] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:12:02,592 - app - INFO - [app.py:96] - 📊 Статус: 308 PERMANENT REDIRECT
+2025-10-24 19:12:02,592 - app - INFO - [app.py:97] - 📋 Заголовки ответа: {'Content-Type': 'text/html; charset=utf-8', 'Content-Length': '263', 'Location': 'http://alicerasp.alwaysdata.net/tgbot/'}
+2025-10-24 19:12:02,592 - app - INFO - [app.py:98] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:12:02,664 - app - INFO - [app.py:76] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:12:02,664 - app - INFO - [app.py:77] - 📍 Путь: /
+2025-10-24 19:12:02,664 - app - INFO - [app.py:78] - 🕐 Время: 2025-10-24T19:12:02.664593
+2025-10-24 19:12:02,664 - app - INFO - [app.py:79] - 📡 Метод: GET
+2025-10-24 19:12:02,664 - app - INFO - [app.py:80] - 🌐 Полный URL: http://alicerasp.alwaysdata.net/tgbot/
+2025-10-24 19:12:02,664 - app - INFO - [app.py:81] - 👤 IP: 86.110.174.94
+2025-10-24 19:12:02,664 - app - INFO - [app.py:82] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Cache-Control': 'max-age=0', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ru,en;q=0.9', 'X-Real-Ip': '86.110.174.94', 'Via': '1.1 alproxy'}
+2025-10-24 19:12:02,665 - app - INFO - [app.py:83] - 🔍 Аргументы: {}
+2025-10-24 19:12:02,665 - app - INFO - [app.py:191] - 🏠 Запрос к корневой странице
+2025-10-24 19:12:02,665 - app - INFO - [app.py:95] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:12:02,665 - app - INFO - [app.py:96] - 📊 Статус: 200 OK
+2025-10-24 19:12:02,665 - app - INFO - [app.py:97] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '232'}
+2025-10-24 19:12:02,665 - app - INFO - [app.py:98] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:14:23,709 - app - INFO - [app.py:77] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:14:23,709 - app - INFO - [app.py:78] - 📍 Путь: /
+2025-10-24 19:14:23,710 - app - INFO - [app.py:79] - 🕐 Время: 2025-10-24T19:14:23.710060
+2025-10-24 19:14:23,710 - app - INFO - [app.py:80] - 📡 Метод: GET
+2025-10-24 19:14:23,710 - app - INFO - [app.py:81] - 🌐 Полный URL: http://alicerasp.alwaysdata.net/tgbot/
+2025-10-24 19:14:23,710 - app - INFO - [app.py:82] - 👤 IP: 86.110.174.94
+2025-10-24 19:14:23,710 - app - INFO - [app.py:83] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Cache-Control': 'max-age=0', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ru,en;q=0.9', 'X-Real-Ip': '86.110.174.94', 'Via': '1.1 alproxy'}
+2025-10-24 19:14:23,710 - app - INFO - [app.py:84] - 🔍 Аргументы: {}
+2025-10-24 19:14:23,710 - app - INFO - [app.py:192] - 🏠 Запрос к корневой странице
+2025-10-24 19:14:23,710 - app - INFO - [app.py:96] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:14:23,710 - app - INFO - [app.py:97] - 📊 Статус: 200 OK
+2025-10-24 19:14:23,710 - app - INFO - [app.py:98] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '232'}
+2025-10-24 19:14:23,711 - app - INFO - [app.py:99] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:18:23,501 - app - INFO - [app.py:77] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:18:23,501 - app - INFO - [app.py:78] - 📍 Путь: /setup
+2025-10-24 19:18:23,501 - app - INFO - [app.py:79] - 🕐 Время: 2025-10-24T19:18:23.501523
+2025-10-24 19:18:23,501 - app - INFO - [app.py:80] - 📡 Метод: GET
+2025-10-24 19:18:23,501 - app - INFO - [app.py:81] - 🌐 Полный URL: http://alicerasp.alwaysdata.net/tgbot/setup
+2025-10-24 19:18:23,501 - app - INFO - [app.py:82] - 👤 IP: 86.110.174.94
+2025-10-24 19:18:23,501 - app - INFO - [app.py:83] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Accept-Encoding': 'gzip, deflate', 'Accept-Language': 'ru,en;q=0.9', 'X-Real-Ip': '86.110.174.94', 'Via': '1.1 alproxy'}
+2025-10-24 19:18:23,501 - app - INFO - [app.py:84] - 🔍 Аргументы: {}
+2025-10-24 19:18:23,502 - app - INFO - [app.py:242] - 🛠️ Запрос на установку вебхука
+2025-10-24 19:18:23,502 - app - INFO - [app.py:117] - 🔄 Устанавливаем вебхук: http://alicerasp.alwaysdata.net/tgbot/webhook
+2025-10-24 19:18:23,568 - app - INFO - [app.py:120] - 📨 Ответ от Telegram API: {'ok': False, 'error_code': 400, 'description': 'Bad Request: bad webhook: An HTTPS URL must be provided for webhook'}
+2025-10-24 19:18:23,569 - app - INFO - [app.py:96] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:18:23,569 - app - INFO - [app.py:97] - 📊 Статус: 200 OK
+2025-10-24 19:18:23,569 - app - INFO - [app.py:98] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '114'}
+2025-10-24 19:18:23,569 - app - INFO - [app.py:99] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:18:51,083 - app - INFO - [app.py:77] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:18:51,083 - app - INFO - [app.py:78] - 📍 Путь: /setup
+2025-10-24 19:18:51,083 - app - INFO - [app.py:79] - 🕐 Время: 2025-10-24T19:18:51.083781
+2025-10-24 19:18:51,083 - app - INFO - [app.py:80] - 📡 Метод: GET
+2025-10-24 19:18:51,083 - app - INFO - [app.py:81] - 🌐 Полный URL: https://alicerasp.alwaysdata.net/tgbot/setup
+2025-10-24 19:18:51,084 - app - INFO - [app.py:82] - 👤 IP: 86.110.174.94
+2025-10-24 19:18:51,084 - app - INFO - [app.py:83] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Sec-Ch-Ua': '"Not)A;Brand";v="8", "Chromium";v="138", "YaBrowser";v="25.8", "Yowser";v="2.5"', 'Sec-Ch-Ua-Mobile': '?0', 'Sec-Ch-Ua-Platform': '"Windows"', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Sec-Fetch-Site': 'none', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-User': '?1', 'Sec-Fetch-Dest': 'document', 'Accept-Encoding': 'gzip, deflate, br, zstd', 'Accept-Language': 'ru,en;q=0.9', 'Priority': 'u=0, i', 'X-Real-Ip': '86.110.174.94', 'Via': '2.0 alproxy', 'X-Forwarded-Proto': 'https'}
+2025-10-24 19:18:51,084 - app - INFO - [app.py:84] - 🔍 Аргументы: {}
+2025-10-24 19:18:51,084 - app - INFO - [app.py:242] - 🛠️ Запрос на установку вебхука
+2025-10-24 19:18:51,084 - app - INFO - [app.py:117] - 🔄 Устанавливаем вебхук: http://alicerasp.alwaysdata.net/tgbot/webhook
+2025-10-24 19:18:51,152 - app - INFO - [app.py:120] - 📨 Ответ от Telegram API: {'ok': False, 'error_code': 400, 'description': 'Bad Request: bad webhook: An HTTPS URL must be provided for webhook'}
+2025-10-24 19:18:51,153 - app - INFO - [app.py:96] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:18:51,153 - app - INFO - [app.py:97] - 📊 Статус: 200 OK
+2025-10-24 19:18:51,153 - app - INFO - [app.py:98] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '114'}
+2025-10-24 19:18:51,153 - app - INFO - [app.py:99] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:19:36,603 - app - INFO - [app.py:77] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:19:36,603 - app - INFO - [app.py:78] - 📍 Путь: /setup
+2025-10-24 19:19:36,603 - app - INFO - [app.py:79] - 🕐 Время: 2025-10-24T19:19:36.603275
+2025-10-24 19:19:36,603 - app - INFO - [app.py:80] - 📡 Метод: GET
+2025-10-24 19:19:36,603 - app - INFO - [app.py:81] - 🌐 Полный URL: https://alicerasp.alwaysdata.net/tgbot/setup
+2025-10-24 19:19:36,603 - app - INFO - [app.py:82] - 👤 IP: 86.110.174.94
+2025-10-24 19:19:36,603 - app - INFO - [app.py:83] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'Cache-Control': 'max-age=0', 'Sec-Ch-Ua': '"Not)A;Brand";v="8", "Chromium";v="138", "YaBrowser";v="25.8", "Yowser";v="2.5"', 'Sec-Ch-Ua-Mobile': '?0', 'Sec-Ch-Ua-Platform': '"Windows"', 'Upgrade-Insecure-Requests': '1', 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 YaBrowser/25.8.0.0 Safari/537.36', 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7', 'Sec-Fetch-Site': 'none', 'Sec-Fetch-Mode': 'navigate', 'Sec-Fetch-User': '?1', 'Sec-Fetch-Dest': 'document', 'Accept-Encoding': 'gzip, deflate, br, zstd', 'Accept-Language': 'ru,en;q=0.9', 'Priority': 'u=0, i', 'X-Real-Ip': '86.110.174.94', 'Via': '2.0 alproxy', 'X-Forwarded-Proto': 'https'}
+2025-10-24 19:19:36,603 - app - INFO - [app.py:84] - 🔍 Аргументы: {}
+2025-10-24 19:19:36,603 - app - INFO - [app.py:242] - 🛠️ Запрос на установку вебхука
+2025-10-24 19:19:36,603 - app - INFO - [app.py:117] - 🔄 Устанавливаем вебхук: https://alicerasp.alwaysdata.net/tgbot/webhook
+2025-10-24 19:19:36,699 - app - INFO - [app.py:120] - 📨 Ответ от Telegram API: {'ok': True, 'result': True, 'description': 'Webhook was set'}
+2025-10-24 19:19:36,700 - app - INFO - [app.py:96] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:19:36,701 - app - INFO - [app.py:97] - 📊 Статус: 200 OK
+2025-10-24 19:19:36,701 - app - INFO - [app.py:98] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '58'}
+2025-10-24 19:19:36,701 - app - INFO - [app.py:99] - ✅ === КОНЕЦ ЗАПРОСА ===
+
+2025-10-24 19:19:57,261 - app - INFO - [app.py:77] - 🗂️ === ВХОДЯЩИЙ ЗАПРОС ===
+2025-10-24 19:19:57,261 - app - INFO - [app.py:78] - 📍 Путь: /webhook
+2025-10-24 19:19:57,261 - app - INFO - [app.py:79] - 🕐 Время: 2025-10-24T19:19:57.261419
+2025-10-24 19:19:57,261 - app - INFO - [app.py:80] - 📡 Метод: POST
+2025-10-24 19:19:57,261 - app - INFO - [app.py:81] - 🌐 Полный URL: https://alicerasp.alwaysdata.net/tgbot/webhook
+2025-10-24 19:19:57,261 - app - INFO - [app.py:82] - 👤 IP: 91.108.5.20
+2025-10-24 19:19:57,261 - app - INFO - [app.py:83] - 📋 Заголовки: {'Host': 'alicerasp.alwaysdata.net', 'X-Telegram-Bot-Api-Secret-Token': 'your_random_secret_here', 'Content-Type': 'application/json', 'Accept-Encoding': 'gzip, deflate', 'Content-Length': '322', 'X-Real-Ip': '91.108.5.20', 'Via': '1.1 alproxy', 'X-Forwarded-Proto': 'https'}
+2025-10-24 19:19:57,261 - app - INFO - [app.py:84] - 🔍 Аргументы: {}
+2025-10-24 19:19:57,262 - app - INFO - [app.py:88] - 📦 JSON данные: {'update_id': 551531440, 'message': {'message_id': 225, 'from': {'id': 5328656496, 'is_bot': False, 'first_name': '.', 'username': 'pun4un', 'language_code': 'ru'}, 'chat': {'id': 5328656496, 'first_name': '.', 'username': 'pun4un', 'type': 'private'}, 'date': 1761326397, 'text': '/start', 'entities': [{'offset': 0, 'length': 6, 'type': 'bot_command'}]}}
+2025-10-24 19:19:57,262 - app - INFO - [app.py:209] - 📨 Получен вебхук от Telegram
+2025-10-24 19:19:57,262 - app - INFO - [app.py:217] - 🔓 Вебхук авторизован
+2025-10-24 19:19:57,262 - app - DEBUG - [app.py:221] - 📊 Данные вебхука: {
+  "update_id": 551531440,
+  "message": {
+    "message_id": 225,
+    "from": {
+      "id": 5328656496,
+      "is_bot": false,
+      "first_name": ".",
+      "username": "pun4un",
+      "language_code": "ru"
+    },
+    "chat": {
+      "id": 5328656496,
+      "first_name": ".",
+      "username": "pun4un",
+      "type": "private"
+    },
+    "date": 1761326397,
+    "text": "/start",
+    "entities": [
+      {
+        "offset": 0,
+        "length": 6,
+        "type": "bot_command"
+      }
+    ]
+  }
+}
+2025-10-24 19:19:57,262 - app - INFO - [app.py:158] - 👤 Сообщение от . (@pun4un, ID: 5328656496): /start
+2025-10-24 19:19:57,262 - app - INFO - [app.py:173] - ⚙️ Обрабатываем команду /start от пользователя 5328656496
+2025-10-24 19:19:57,262 - app - INFO - [app.py:145] - 💬 Отправляем сообщение в чат 5328656496: 🤖 Добро пожаловать! Я бот на AlwaysData с детальны...
+2025-10-24 19:19:57,362 - app - INFO - [app.py:96] - 📤 === ИСХОДЯЩИЙ ОТВЕТ ===
+2025-10-24 19:19:57,363 - app - INFO - [app.py:97] - 📊 Статус: 200 OK
+2025-10-24 19:19:57,363 - app - INFO - [app.py:98] - 📋 Заголовки ответа: {'Content-Type': 'application/json', 'Content-Length': '16'}
+2025-10-24 19:19:57,363 - app - INFO - [app.py:99] - ✅ === КОНЕЦ ЗАПРОСА ===
+
