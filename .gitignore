@@ -2,3 +2,5 @@
 comments.py
 banwords.py
 *.env
+*.json
+*.conf
