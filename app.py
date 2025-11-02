@@ -1,4 +1,9 @@
 import time
+import datetime
+import pytz  # нужно установить: pip install pytz
+
+moscow_tz = pytz.timezone('Europe/Moscow')
+
 from faker import Faker
 from flask import Flask, request, jsonify
 import requests
@@ -16,6 +21,7 @@ app = Flask(__name__)
 
 # Конфигурация
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+LOGGER_CHAT_ID = os.getenv("LOGGER_CHAT_ID")
 SECRET_TOKEN = os.getenv("WEBHOOK_SECRET", "default_secret")
 BASE_URL = "https://alicerasp.alwaysdata.net/tgbot"
 
@@ -27,8 +33,9 @@ logger = logging.getLogger(__name__)
 
 
 class TelegramBot:
-    def __init__(self, token):
+    def __init__(self, token, logger_chat_id):
         self.token = token
+        self.logger_chat_id = logger_chat_id
         self.base_url = f"https://api.telegram.org/bot{token}"
         self.prev_media_groups = {}  # Словарь для отслеживания media_group_id по чатам
         self.load_comments()
@@ -44,6 +51,10 @@ class TelegramBot:
         self.lock = threading.Lock()
         # Словарь для отслеживания обработанных media_group_id
         self.processed_media_groups = {}
+        self.logged_msgs = {}
+        self.last_cleanup = time.time()
+
+
     def load_comments(self):
         with open("comments.json", "r", encoding="utf-8") as f:
             comment_data = json.load(f)
@@ -96,6 +107,22 @@ class TelegramBot:
             logger.error(f"Ошибка установки реакции: {e}")
             return None
 
+    def cleanup_old_logs(self):
+        """Очистка старых логов"""
+        current_time = time.time()
+        if current_time - self.last_cleanup > 3600:  # Каждый час
+            # Удаляем записи старше 24 часов
+            keys_to_remove = []
+            for key, value in self.logged_msgs.items():
+                if (time.time() - self.logged_msgs.get(key, {}).get('timestamp', 0)) > 24*60*60:
+                    keys_to_remove.append(key)
+            
+            for key in keys_to_remove:
+                del self.logged_msgs[key]
+            
+            self.last_cleanup = current_time
+            logger.info(f"Очищено {len(keys_to_remove)} старых логов")
+
     def process_message(self, message_data):
         """Обработка входящего сообщения"""
         try:
@@ -107,7 +134,7 @@ class TelegramBot:
             logger.info(
                 f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}"
             )
-
+            
             # Обработка команды /start
             if text == "/start":
                 return self.handle_start_command(chat_id, chat_type)
@@ -118,11 +145,21 @@ class TelegramBot:
 
             # Обработка личных сообщений
             elif chat_type == "private":
-                return self.handle_private_message(chat_id, text, message_id)
+                msg = self.send_message(self.logger_chat_id, f"[{datetime.datetime.now(moscow_tz).strftime("%H:%M:%S")} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')}, {text}]")
+                if msg and msg.get('ok'):
+                    bot_msg_id = msg.get('result').get('message_id')
+                    # Сохраняем с timestamp
+                    self.logged_msgs[bot_msg_id] = {
+                        'chat_id': chat_id,
+                        'message_id': message_id,
+                        'timestamp': time.time()
+                    }
+                    self.cleanup_old_logs()  # Периодическая очистка
+                    return self.handle_private_message(chat_id, text, message_id, message_data)
 
         except Exception as e:
             logger.error(f"Ошибка обработки сообщения: {e}")
-
+    
     def handle_start_command(self, chat_id, chat_type):
         """Обработка команды /start"""
         if chat_type == "private":
@@ -136,80 +173,139 @@ class TelegramBot:
                 "Привет! Я бот этой группы. Я реагирую на пересланные сообщения и слежу за запрещенными словами.",
             )
 
-    def handle_private_message(self, chat_id, text, message_id):
+    def handle_add_comment(self,text,chat_id):
+
+        if len(text.split()) < 3:
+            self.send_message(
+                chat_id, "Используйте /add_comment [text|photo] текст"
+            )
+        else:
+            comment_type = text.split()[1]
+            comment_text = " ".join(text.split()[2:])
+            if comment_type == "text":
+                self.text_comments.append(comment_text)
+                self.send_message(
+                    chat_id, f"Добавлен текстовый комментарий: {comment_text}"
+                )
+            elif comment_type == "photo":
+                self.photo_comments.append(comment_text)
+                self.send_message(
+                    chat_id, f"Добавлен фото-комментарий: {comment_text}"
+                )
+            else:
+                self.send_message(
+                    chat_id,
+                    "Неверный тип комментария. Используйте /add_comment text или /add_comment photo",
+                )
+                return
+            self.save_comments()
+    
+    def handle_list_comment(self,chat_id):
+        msg = []
+        num = 1
+        for i in self.text_comments:
+            msg.append(f"{num}. {i}" + (("( "+self.parse_comment(i,re.findall(r"{{\w+}}", i))+" )") if re.findall(r"{{\w+}}", i) else ""))
+            num += 1
+        msg.append("ФОТО".center(60, "="))
+        num = 1
+        for i in self.photo_comments:
+            msg.append(f"{num}. {i}" + (("( "+self.parse_comment(i,re.findall(r"{{\w+}}", i))+" )") if re.findall(r"{{\w+}}", i) else ""))
+            num += 1
+        self.send_message(chat_id, "\n".join(msg))
+
+    def handle_delete_comment(self,chat_id,text):
+        if len(text.split()) < 3:
+                self.send_message(chat_id, "/delete_comment [text | photo] [номер]")
+                return
+        comment_type = text.split()[1]
+        del_num = text.split()[2]
+        if del_num.isdigit():
+            del_num = int(del_num)
+            if comment_type == "text":
+                if del_num <= len(self.text_comments):
+                    del_txt = self.text_comments[del_num-1]
+                    self.text_comments.pop(del_num - 1)
+                    self.save_comments()
+                    self.send_message(chat_id, f"Комментарий №{del_num} ({del_txt}) удален")
+                    return
+                else:
+                    self.send_message(chat_id, "Нет такого номера. используй /comment_list")
+                    return
+                
+            elif comment_type == "photo":
+                if del_num <= len(self.photo_comments):
+                    del_txt = self.photo_comments[del_num-1]
+                    self.photo_comments.pop(del_num - 1)
+                    self.save_comments()
+                    self.send_message(chat_id, f"Комментарий №{del_num} ({del_txt}) удален")
+                    return
+                else:
+                    self.send_message(chat_id, "Нет такого номера. используй /comment_list")
+                    return
+        else:
+            self.send_message(chat_id, "Введите число")        
+
+    def handle_get_user_info(self,chat_id,text):
+        if str(chat_id) == str(self.logger_chat_id):
+                        find_chat = text.split()[1]
+                        user_info = self.get_chat_info(find_chat)
+                        logger.info(find_chat,user_info,chat_id)
+                        self.send_message(self.logger_chat_id, f"данные по чату {find_chat}:\nID: {user_info['id']}\nИмя: {user_info.get('first_name', 'Не указано')}\nФамилия: {user_info.get('last_name', 'Не указана')}\nUsername: @{user_info.get('username', 'Не указан')}")
+        else:
+            self.send_message(chat_id, "Недостаточно прав")
+
+    def handle_answer(self, chat_id, text, message_data):
+        # Получаем ID сообщения, на которое ответили
+        reply_to_message = message_data.get("reply_to_message")
+        if not reply_to_message:
+            self.send_message(chat_id, "Это сообщение не является ответом на другое сообщение")
+            return
+        
+        # Получаем message_id сообщения, на которое ответили
+        replied_message_id = reply_to_message.get("message_id")
+        if not replied_message_id:
+            self.send_message(chat_id, "Не удалось определить сообщение, на которое вы ответили")
+            return
+        
+        # Проверяем, есть ли такой message_id в logged_msgs
+        if replied_message_id not in self.logged_msgs:
+            self.send_message(chat_id, "Сообщение, на которое вы ответили, не найдено в логах")
+            return
+        
+        # Получаем данные для ответа
+        try:
+            # ИСПРАВЛЕНИЕ: получаем данные из словаря, а не распаковываем как кортеж
+            data = self.logged_msgs[replied_message_id]
+            answer_chat_id = data['chat_id']
+            answer_msg_id = data['message_id']
+            answer = text.split(" ", 1)[1]  # Берем текст после "/answer "
+            
+            # Отправляем ответ
+            self.send_message(answer_chat_id, answer, reply_to_message_id=answer_msg_id)
+            self.send_message(chat_id, "Ответ отправлен")
+        except IndexError:
+            self.send_message(chat_id, "Используйте: /answer [текст ответа]")
+        except Exception as e:
+            logger.error(f"Ошибка отправки ответа: {e}")
+            self.send_message(chat_id, "Ошибка при отправке ответа")
+    def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
         if text and not text.startswith("/"):
             self.send_message(
                 chat_id, f"Вы написали: {text}", reply_to_message_id=message_id
             )
         elif "/add_comment" in text:
-            if len(text.split()) < 3:
-                self.send_message(
-                    chat_id, "Используйте /add_comment [text|photo] текст"
-                )
-            else:
-                comment_type = text.split()[1]
-                comment_text = " ".join(text.split()[2:])
-                if comment_type == "text":
-                    self.text_comments.append(comment_text)
-                    self.send_message(
-                        chat_id, f"Добавлен текстовый комментарий: {comment_text}"
-                    )
-                elif comment_type == "photo":
-                    self.photo_comments.append(comment_text)
-                    self.send_message(
-                        chat_id, f"Добавлен фото-комментарий: {comment_text}"
-                    )
-                else:
-                    self.send_message(
-                        chat_id,
-                        "Неверный тип комментария. Используйте /add_comment text или /add_comment photo",
-                    )
-                    return
-                self.save_comments()
+            self.handle_add_comment(text,chat_id)
         elif "/comment_list" in text:
-            msg = []
-            num = 1
-            for i in self.text_comments:
-                msg.append(f"{num}. {i}" + (("( "+self.parse_comment(i,re.findall(r"{{\w+}}", i))+" )") if re.findall(r"{{\w+}}", i) else ""))
-                num += 1
-            msg.append("ФОТО".center(60, "="))
-            num = 1
-            for i in self.photo_comments:
-                msg.append(f"{num}. {i}" + (("( "+self.parse_comment(i,re.findall(r"{{\w+}}", i))+" )") if re.findall(r"{{\w+}}", i) else ""))
-                num += 1
-            self.send_message(chat_id, "\n".join(msg))
+            self.handle_list_comment(chat_id)
+            
         elif "/delete_comment" in text:
-            if len(text.split()) < 3:
-                self.send_message(chat_id, "/delete_comment [text | photo] [номер]")
-                return
-            comment_type = text.split()[1]
-            del_num = text.split()[2]
-            if del_num.isdigit():
-                del_num = int(del_num)
-                if comment_type == "text":
-                    if del_num <= len(self.text_comments):
-                        del_txt = self.text_comments[del_num-1]
-                        self.text_comments.pop(del_num - 1)
-                        self.save_comments()
-                        self.send_message(chat_id, f"Комментарий №{del_num} ({del_txt}) удален")
-                        return
-                    else:
-                        self.send_message(chat_id, "Нет такого номера. используй /comment_list")
-                        return
-                    
-                elif comment_type == "photo":
-                    if del_num <= len(self.photo_comments):
-                        del_txt = self.photo_comments[del_num-1]
-                        self.photo_comments.pop(del_num - 1)
-                        self.save_comments()
-                        self.send_message(chat_id, f"Комментарий №{del_num} ({del_txt}) удален")
-                        return
-                    else:
-                        self.send_message(chat_id, "Нет такого номера. используй /comment_list")
-                        return
-            else:
-                self.send_message(chat_id, "Введите число")        
+            self.handle_delete_comment(chat_id,text)
+        elif "/get_user_info" in text:
+            self.handle_get_user_info(chat_id,text)
+        elif "/answer" in text and str(chat_id) == str(self.logger_chat_id):
+            self.handle_answer(chat_id,text,message_data)
+
 
     def handle_group_message(self, message_data):
         """Обработка сообщений в группах"""
@@ -243,6 +339,7 @@ class TelegramBot:
                 self.faker_replace[i.replace("{{", "").replace("}}", "")](),
             )
         return comment
+   
     def handle_forwarded_message(self, message_data):
         """Обработка пересланных сообщений"""
         logger.info("handle_forwarded_message")
@@ -328,6 +425,25 @@ class TelegramBot:
         
         logger.info(f"Отправка комментария: {comment}")
         self.send_message(chat_id, comment, reply_to_message_id=message_id)
+   
+    def get_chat_info(self, chat_id):
+        """Получение информации о чате/пользователе по chat_id"""
+        url = f"{self.base_url}/getChat"
+        payload = {"chat_id": chat_id}
+        
+        try:
+            response = requests.post(url, json=payload)
+            result = response.json()
+            
+            if result.get("ok"):
+                return result.get("result")
+            else:
+                logger.error(f"Ошибка получения информации о чате: {result}")
+                return None
+        except Exception as e:
+            logger.error(f"Ошибка запроса getChat: {e}")
+            return None
+   
     def check_banwords(self, chat_id, text, message_id):
         """Проверка запрещенных слов"""
         for key in banwords.keys():
@@ -340,7 +456,7 @@ class TelegramBot:
 
 
 # Инициализация бота
-bot = TelegramBot(BOT_TOKEN)
+bot = TelegramBot(BOT_TOKEN, LOGGER_CHAT_ID)
 
 
 @app.route("/tgbot/webhook", methods=["POST"])
