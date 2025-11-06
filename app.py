@@ -49,10 +49,10 @@ def required_permission(permission_level):
             try:
                 result = self.cursor.execute(
                     f"""
-                                                SELECT permission
-                                                from users
-                                                WHERE chat_id = ?""",
-                    (chat_id,),
+                    SELECT permission
+                    from users
+                    WHERE chat_id = ?""",
+                    (chat_id,)
                 )
                 result = result.fetchone()
 
@@ -72,7 +72,7 @@ def required_permission(permission_level):
                         "пользователь не найден,используйте /start или обратитесь к разработчику",
                     )
             except Exception as e:
-
+                logger.error("ошибка при проверке прав: %s", str(e))
                 self.send_message(
                     chat_id,
                     f"ошибка при проверке прав: {type(e).__name__}, обратитесь к разработчику",
@@ -107,6 +107,14 @@ class TelegramBot:
         ignor_chat_ids = os.getenv("IGNORING_CHAT_IDS")
         self.ignore_chat_ids = [i.strip() for i in ignor_chat_ids.split(",")]
         self.connect_users_db(db_file)
+        self.help_msg = f"/help - помощь - доступно от {self.parse_permission_to_str(Permissions.BASE)}\n" \
+                        f"/get_users_list - получить список пользователей - доступно от {self.parse_permission_to_str(Permissions.BASE)}\n" \
+                        f"/comment_list - список комментов - доступно от {self.parse_permission_to_str(Permissions.BASE)}\n" \
+                        f"/add_comment [text | photo] [text] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
+                        f"/delete_comment [text | photo] [id] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
+                        f"/set_permission [username] [permission] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
+                        f"/get_user_info [chat_id | username] - доступно от {self.parse_permission_to_str(Permissions.ADMIN)}\n" \
+                        f"/answer [text] - уникальная команда - доступно от логгер"
 
     @staticmethod
     def parse_permission(permission):
@@ -191,15 +199,18 @@ class TelegramBot:
             return Permissions.BASE  # Значение по умолчанию
 
     def get_chat_id_by_username(self, username: str):
+        if username.startswith("@"):
+            username = username[1:]
         result = self.cursor.execute(
             "SELECT chat_id FROM users WHERE username = ?", (username,)
         ).fetchone()
         if result:
             return result[0]
         else:
-            return None
+            logger.error(f"Пользователь с именем {username} не найден")
+            raise ValueError(f"Пользователь с именем {username} не найден")
 
-    @required_permission(Permissions.ADMIN)
+    @required_permission(Permissions.MODER)
     def set_user_pemission(self, chat_id, username_to_set_permission, permission):
         if isinstance(permission, str):
             permission = self.parse_permission(permission)
@@ -226,10 +237,10 @@ class TelegramBot:
             return
 
         if (
-            self.get_user_permission(chat_id)
-            > self.get_user_permission(chat_id_to_set_permission)
-            and self.get_user_permission(chat_id) > permission
-        ):
+                self.get_user_permission(chat_id)
+                > self.get_user_permission(chat_id_to_set_permission)
+                and self.get_user_permission(chat_id) >= permission
+            ):
 
             try:
 
@@ -245,7 +256,22 @@ class TelegramBot:
                 )
             except Exception as e:
                 self.send_message(chat_id, f"ошибка {type(e).__name__}")
+        elif (self.get_user_permission(chat_id) == Permissions.DEV and not self.get_user_permission(chat_id_to_set_permission) == Permissions.DEV)\
+            or str(chat_id) == str(self.logger_chat_id):
+            try:
 
+                self.cursor.execute(
+                    f"UPDATE users SET permission = ? WHERE chat_id = ?",
+                    (permission, chat_id_to_set_permission),
+                )
+                self.conn.commit()
+                self.send_message(chat_id, f"успешно")
+                self.send_message(
+                    chat_id_to_set_permission,
+                    f"вам выдали права {self.parse_permission_to_str(permission)}",
+                )
+            except Exception as e:
+                self.send_message(chat_id, f"ошибка {type(e).__name__}")
         else:
             self.send_message(chat_id, "ты чо балбес чтоль")
 
@@ -433,6 +459,7 @@ class TelegramBot:
                 return
             self.save_comments()
 
+    @required_permission(Permissions.BASE)
     def handle_list_comment(self, chat_id):
         msg = []
         num = 1
@@ -505,6 +532,13 @@ class TelegramBot:
     def handle_get_user_info(self, chat_id, text):
         if str(chat_id) == str(self.logger_chat_id):
             find_chat = text.split()[1]
+            if isinstance(find_chat, str):
+                try:
+                    find_chat = self.get_chat_id_by_username(find_chat)
+                except ValueError:
+                    return self.send_message(chat_id, "Пользователь не найден")
+            if find_chat is None:
+                return self.send_message(chat_id, "Пользователь не найден")
             user_info = self.get_chat_info(find_chat)
             logger.info(find_chat, user_info, chat_id)
             self.send_message(
@@ -557,7 +591,8 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Ошибка отправки ответа: {e}")
             self.send_message(chat_id, "Ошибка при отправке ответа")
-    @required_permission(Permissions.ADMIN)
+    
+    @required_permission(Permissions.MODER)
     def handle_set_permission(self, chat_id, text):
         try:
             if len(text.split()) != 3:
@@ -581,6 +616,18 @@ class TelegramBot:
                 chat_id, "Используйте: /set_permission [username] [permission]"
             )
 
+    @required_permission(Permissions.BASE)
+    def handle_get_users_list(self,chat_id):
+        result = self.cursor.execute("SELECT username,permission FROM users ORDER BY permission DESC").fetchall()
+        msg = [f"Список пользователей:"]
+        for i in result:
+            msg.append(f"@{i[0]} - {self.parse_permission_to_str(i[1])}")
+        self.send_message(chat_id, "\n".join(msg))
+
+    @required_permission(Permissions.BASE)
+    def handle_help(self, chat_id):
+        self.send_message(chat_id, self.help_msg)
+
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
         if text and not text.startswith("/"):
@@ -599,13 +646,15 @@ class TelegramBot:
             self.handle_answer(chat_id, text, message_data)
         elif text.startswith("/set_permission"):
             self.handle_set_permission(chat_id, text)
-
+        elif text.startswith("/get_users_list"):
+            self.handle_get_users_list(chat_id)
+        elif text.startswith("/help"):
+            self.handle_help(chat_id)
     def get_forwarded_channel_info(self, message_data):
         """Получает информацию о канале, из которого переслано сообщение"""
         try:
-            return message_data['sender_chat']['title']
+            return message_data['sender_chat']['title'] or None
 
-            return None
 
         except Exception as e:
             logger.error(f"Ошибка получения информации о канале: {e}")
