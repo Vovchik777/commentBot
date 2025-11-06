@@ -120,7 +120,7 @@ class TelegramBot:
 
     def parse_permission_to_str(self, permission):
         permission_map = {
-            Permissions.BASE: "база",
+            Permissions.BASE: "базовый минимум",
             Permissions.MODER: "модер",
             Permissions.ADMIN: "админ",
             Permissions.DEV: "разработчик",
@@ -128,29 +128,60 @@ class TelegramBot:
         return permission_map.get(permission)
 
     def load_logged_msgs(self):
-        with open("logged_msgs.json", "r") as f:
-            self.logged_msgs = json.load(f)
-            self.logged_msgs = {int(k): v for k, v in self.logged_msgs.items()}
+        """Загружает logged_msgs из файла, обрабатывает ошибки"""
+        try:
+            # Проверяем существование файла
+            if not os.path.exists("logged_msgs.json"):
+                self.logged_msgs = {}
+                return
+
+            with open("logged_msgs.json", "r", encoding="utf-8") as f:
+                data = json.load(f)
+                # Проверяем, что данные являются словарем
+                if isinstance(data, dict):
+                    self.logged_msgs = data
+                else:
+                    logger.error(
+                        "Некорректный формат данных в logged_msgs.json, ожидается словарь"
+                    )
+                    self.logged_msgs = {}
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Ошибка декодирования JSON в logged_msgs.json: {e}")
+            self.logged_msgs = {}
+        except Exception as e:
+            logger.error(f"Ошибка загрузки logged_msgs: {e}")
+            self.logged_msgs = {}
 
     def save_logged_msgs(self):
-        with open("logged_msgs.json", "w") as f:
-            json.dump(self.logged_msgs, f)
+        """Сохраняет logged_msgs в файл, обрабатывает ошибки"""
+        try:
+            # Убедимся, что logged_msgs является словарем
+            if not hasattr(self, "logged_msgs") or not isinstance(
+                self.logged_msgs, dict
+            ):
+                self.logged_msgs = {}
+
+            with open("logged_msgs.json", "w", encoding="utf-8") as f:
+                json.dump(self.logged_msgs, f, ensure_ascii=False, indent=2)
+
+        except Exception as e:
+            logger.error(f"Ошибка сохранения logged_msgs: {e}")
 
     def connect_users_db(self, db_file):
         self.conn = sqlite3.connect(db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
-        self.cursor.execute(
-            f"""CREATE TABLE IF NOT EXISTS {db_file.split(".")[0]}
-                            (
-                                chat_id INTEGER PRIMARY KEY,
-                                username TEXT,
-                                permission INTEGER
-                            )"""
-        )
+        self.cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                chat_id INTEGER PRIMARY KEY,
+                username TEXT,
+                permission INTEGER DEFAULT 0
+            )
+        """)
         self.conn.commit()
 
     def get_user_permission(self, chat_id):
-        result =  self.cursor.execute(
+        result = self.cursor.execute(
             "SELECT permission FROM users WHERE chat_id = ?", (chat_id,)
         ).fetchone()
 
@@ -158,6 +189,7 @@ class TelegramBot:
             return result[0]
         else:
             return Permissions.BASE  # Значение по умолчанию
+
     def get_chat_id_by_username(self, username: str):
         result = self.cursor.execute(
             "SELECT chat_id FROM users WHERE username = ?", (username,)
@@ -184,7 +216,12 @@ class TelegramBot:
             username_to_set_permission
         )
 
-        if chat_id_to_set_permission is None or not self.cursor.execute("SELECT 1 FROM users WHERE username = ?", (username_to_set_permission,)).fetchone():
+        if (
+            chat_id_to_set_permission is None
+            or not self.cursor.execute(
+                "SELECT 1 FROM users WHERE username = ?", (username_to_set_permission,)
+            ).fetchone()
+        ):
             self.send_message(chat_id, "пользователь не найден")
             return
 
@@ -295,7 +332,6 @@ class TelegramBot:
             # Удаляем записи старше 24 часов
             keys_to_remove = []
             for key, value in self.logged_msgs.items():
-                # ИСПРАВЛЕНИЕ: получаем timestamp из value, а не через get
                 if (current_time - value.get("timestamp", 0)) > 24 * 60 * 60:
                     keys_to_remove.append(key)
 
@@ -314,6 +350,7 @@ class TelegramBot:
     def process_message(self, message_data):
         """Обработка входящего сообщения"""
         try:
+            logger.info(f"Получено сообщение: {message_data}")
             chat_id = message_data["chat"]["id"]
             chat_type = message_data["chat"]["type"]
             message_id = message_data["message_id"]
@@ -338,12 +375,12 @@ class TelegramBot:
             elif chat_type == "private":
                 msg = self.send_message(
                     self.logger_chat_id,
-                    f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')}, {text}]",
+                    f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {text}]",
                 )
                 if msg and msg.get("ok"):
                     bot_msg_id = msg.get("result").get("message_id")
                     # Сохраняем с timestamp
-                    self.logged_msgs[bot_msg_id] = {
+                    self.logged_msgs[str(bot_msg_id)] = {
                         "chat_id": chat_id,
                         "message_id": message_id,
                         "timestamp": time.time(),
@@ -495,8 +532,11 @@ class TelegramBot:
             )
             return
 
+        # ПРЕОБРАЗУЕМ В СТРОКУ для поиска в JSON
+        replied_message_id_str = str(replied_message_id)
+
         # Проверяем, есть ли такой message_id в logged_msgs
-        if replied_message_id not in self.logged_msgs:
+        if replied_message_id_str not in self.logged_msgs:
             self.send_message(
                 chat_id, "Сообщение, на которое вы ответили, не найдено в логах"
             )
@@ -504,8 +544,7 @@ class TelegramBot:
 
         # Получаем данные для ответа
         try:
-            # ИСПРАВЛЕНИЕ: получаем данные из словаря, а не распаковываем как кортеж
-            data = self.logged_msgs[replied_message_id]
+            data = self.logged_msgs[replied_message_id_str]
             answer_chat_id = data["chat_id"]
             answer_msg_id = data["message_id"]
             answer = text.split(" ", 1)[1]  # Берем текст после "/answer "
@@ -518,12 +557,13 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Ошибка отправки ответа: {e}")
             self.send_message(chat_id, "Ошибка при отправке ответа")
-
     @required_permission(Permissions.ADMIN)
-    def handle_set_permission(self,chat_id,text):
+    def handle_set_permission(self, chat_id, text):
         try:
             if len(text.split()) != 3:
-                self.send_message(chat_id, "Используйте: /set_permission [username] [permission]")
+                self.send_message(
+                    chat_id, "Используйте: /set_permission [username] [permission]"
+                )
                 return
             _, username, permission = text.split()
 
@@ -531,13 +571,15 @@ class TelegramBot:
                 username = username[1:]
 
             if self.parse_permission(permission) is None:
-                self.send_message(chat_id, "Неверное значение разрешения (BASE,MODER,ADMIN)")
+                self.send_message(
+                    chat_id, "Неверное значение разрешения (BASE,MODER,ADMIN)"
+                )
                 return
-            self.set_user_pemission(chat_id,username,permission)
+            self.set_user_pemission(chat_id, username, permission)
         except ValueError:
-            self.send_message(chat_id, "Используйте: /set_permission [username] [permission]")
-
-
+            self.send_message(
+                chat_id, "Используйте: /set_permission [username] [permission]"
+            )
 
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
@@ -557,6 +599,17 @@ class TelegramBot:
             self.handle_answer(chat_id, text, message_data)
         elif text.startswith("/set_permission"):
             self.handle_set_permission(chat_id, text)
+
+    def get_forwarded_channel_info(self, message_data):
+        """Получает информацию о канале, из которого переслано сообщение"""
+        try:
+            return message_data['sender_chat']['title']
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Ошибка получения информации о канале: {e}")
+            return None
 
     def handle_group_message(self, message_data):
         """Обработка сообщений в группах"""
@@ -598,8 +651,21 @@ class TelegramBot:
         message_id = message_data["message_id"]
         media_group_id = message_data.get("media_group_id")
         caption = message_data.get("caption", "")
+        msg = self.send_message(
+            self.logger_chat_id,
+            f"СООБЩЕНИЕ ИЗ КАНАЛА {self.get_forwarded_channel_info(message_data)} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {caption or message_data.get('text', 'нет текста')}]",
+        )
+        if msg and msg.get("ok"):
+            bot_msg_id = msg.get("result").get("message_id")
+            # Сохраняем с timestamp
+            self.logged_msgs[str(bot_msg_id)] = {
+                "chat_id": chat_id,
+                "message_id": message_id,
+                "timestamp": time.time(),
+            }
+            self.save_logged_msgs()
+            self.cleanup_old_logs()  # Периодическая очистка
 
-        # Инициализация атрибута для хранения предыдущего комментария
         if not hasattr(self, "prevcomment"):
             self.prevcomment = ""
 
