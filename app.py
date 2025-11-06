@@ -116,7 +116,7 @@ class TelegramBot:
             "admin": Permissions.ADMIN,
             "developer": Permissions.DEV,
         }
-        return permission_map.get(permission.lower(), Permissions.BASE)
+        return permission_map.get(permission.lower())
 
     def parse_permission_to_str(self, permission):
         permission_map = {
@@ -136,7 +136,6 @@ class TelegramBot:
         with open("logged_msgs.json", "w") as f:
             json.dump(self.logged_msgs, f)
 
-
     def connect_users_db(self, db_file):
         self.conn = sqlite3.connect(db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
@@ -151,18 +150,52 @@ class TelegramBot:
         self.conn.commit()
 
     def get_user_permission(self, chat_id):
-        return self.cursor.execute(
+        result =  self.cursor.execute(
             "SELECT permission FROM users WHERE chat_id = ?", (chat_id,)
-        ).fetchone()[0]
+        ).fetchone()
+
+        if result and result[0] is not None:
+            return result[0]
+        else:
+            return Permissions.BASE  # Значение по умолчанию
+    def get_chat_id_by_username(self, username: str):
+        result = self.cursor.execute(
+            "SELECT chat_id FROM users WHERE username = ?", (username,)
+        ).fetchone()
+        if result:
+            return result[0]
+        else:
+            return None
 
     @required_permission(Permissions.ADMIN)
-    def set_user_pemission(self, chat_id, chat_id_to_set_permission, permission):
+    def set_user_pemission(self, chat_id, username_to_set_permission, permission):
         if isinstance(permission, str):
             permission = self.parse_permission(permission)
-        if self.get_user_permission(chat_id) > self.get_user_permission(
-            chat_id_to_set_permission
+
+        if permission is None:
+            self.send_message(chat_id, "неверный уровень доступа")
+            return
+
+        if username_to_set_permission is None:
+            self.send_message(chat_id, "неверный формат команды")
+            return
+
+        chat_id_to_set_permission = self.get_chat_id_by_username(
+            username_to_set_permission
+        )
+
+        if chat_id_to_set_permission is None or not self.cursor.execute("SELECT 1 FROM users WHERE username = ?", (username_to_set_permission,)).fetchone():
+            self.send_message(chat_id, "пользователь не найден")
+            return
+
+        if (
+            self.get_user_permission(chat_id)
+            > self.get_user_permission(chat_id_to_set_permission)
+            and self.get_user_permission(chat_id) > permission
         ):
+
             try:
+
                 self.cursor.execute(
                     f"UPDATE users SET permission = ? WHERE chat_id = ?",
                     (permission, chat_id_to_set_permission),
@@ -277,6 +310,7 @@ class TelegramBot:
                     f"Очищено {len(keys_to_remove)} старых логов",
                 )
                 self.save_logged_msgs()
+
     def process_message(self, message_data):
         """Обработка входящего сообщения"""
         try:
@@ -288,8 +322,6 @@ class TelegramBot:
             logger.info(
                 f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}"
             )
-            if str(chat_id) in [x for x in map(str, self.ignore_chat_ids)]:
-                return self.send_message(chat_id, "я не буду здесь работать")
 
             # Обработка команды /start
             if text == "/start":
@@ -297,6 +329,9 @@ class TelegramBot:
 
             # Обработка сообщений в группах
             elif chat_type in ["group", "supergroup"]:
+                if str(chat_id) in [x for x in map(str, self.ignore_chat_ids)]:
+                    return self.send_message(chat_id, "я не буду здесь работать")
+
                 return self.handle_group_message(message_data)
 
             # Обработка личных сообщений
@@ -484,23 +519,44 @@ class TelegramBot:
             logger.error(f"Ошибка отправки ответа: {e}")
             self.send_message(chat_id, "Ошибка при отправке ответа")
 
+    @required_permission(Permissions.ADMIN)
+    def handle_set_permission(self,chat_id,text):
+        try:
+            if len(text.split()) != 3:
+                self.send_message(chat_id, "Используйте: /set_permission [username] [permission]")
+                return
+            _, username, permission = text.split()
+
+            if username.startswith("@"):
+                username = username[1:]
+
+            if self.parse_permission(permission) is None:
+                self.send_message(chat_id, "Неверное значение разрешения (BASE,MODER,ADMIN)")
+                return
+            self.set_user_pemission(chat_id,username,permission)
+        except ValueError:
+            self.send_message(chat_id, "Используйте: /set_permission [username] [permission]")
+
+
+
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
         if text and not text.startswith("/"):
             self.send_message(
                 chat_id, f"Вы написали: {text}", reply_to_message_id=message_id
             )
-        elif text.startwith("/add_comment"):
+        elif text.startswith("/add_comment"):
             self.handle_add_comment(chat_id, text)
-        elif text.startwith("/list_comment"):
+        elif text.startswith("/comment_list"):
             self.handle_list_comment(chat_id)
-
-        elif text.startwith("/delete_comment"):
+        elif text.startswith("/delete_comment"):
             self.handle_delete_comment(chat_id, text)
-        elif text.startwith("/get_user_info"):
+        elif text.startswith("/get_user_info"):
             self.handle_get_user_info(chat_id, text)
-        elif text.startwith("/answer") and str(chat_id) == str(self.logger_chat_id):
+        elif text.startswith("/answer") and str(chat_id) == str(self.logger_chat_id):
             self.handle_answer(chat_id, text, message_data)
+        elif text.startswith("/set_permission"):
+            self.handle_set_permission(chat_id, text)
 
     def handle_group_message(self, message_data):
         """Обработка сообщений в группах"""
