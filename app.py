@@ -1,3 +1,4 @@
+from functools import wraps
 import time
 import datetime
 import pytz  # нужно установить: pip install pytz
@@ -15,6 +16,9 @@ import json
 from dotenv import load_dotenv
 from banwords import banwords
 import threading
+from enum import IntEnum
+import sqlite3
+
 load_dotenv()
 
 app = Flask(__name__)
@@ -31,9 +35,15 @@ BASE_URL = "https://alicerasp.alwaysdata.net/tgbot"
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class Permissions(IntEnum):
+    BASE  = 0
+    MODER = 1
+    ADMIN = 2
+    DEV   = 3
+
 
 class TelegramBot:
-    def __init__(self, token, logger_chat_id):
+    def __init__(self, token, logger_chat_id,db_file):
         self.token = token
         self.logger_chat_id = logger_chat_id
         self.base_url = f"https://api.telegram.org/bot{token}"
@@ -53,8 +63,83 @@ class TelegramBot:
         self.processed_media_groups = {}
         self.logged_msgs = {}
         self.last_cleanup = time.time()
+        self.connect_users_db(db_file)
 
 
+    def required_permission(permission_level):
+        def decorator(func):
+            def wrapper(self, chat_id, *args, **kwargs):
+                try:
+                    result = self.cursor.execute(f'''
+                                                    SELECT permission
+                                                    from users
+                                                    WHERE chat_id = ?''', (chat_id,)
+                                                )
+                    if result:
+                        if result.fetchone()[0] >= permission_level:
+                            func(self, chat_id, *args, **kwargs)
+                        else:
+                            self.send_message(chat_id, "недостаточно прав")
+                    else:
+                        self.send_message(chat_id, "пользователь не найден,используйте /start или обратитесь к разработчику")
+                except Exception as e:
+                    self.send_message(chat_id, f"ошибка при проверке прав: {type(e).__name__}, обратитесь к разработчику")
+
+            return wrapper
+        return decorator
+
+    @staticmethod
+    def parse_permission(permission):
+        permission_map = {
+        "base": Permissions.BASE,
+        "moder": Permissions.MODER, 
+        "admin": Permissions.ADMIN,
+        "developer": Permissions.DEV
+        }
+        return permission_map.get(permission.lower(), Permissions.BASE)
+        
+
+    def connect_users_db(self, db_file):
+        self.conn = sqlite3.connect(db_file, check_same_thread=False)
+        self.cursor = self.conn.cursor()
+        self.cursor.execute(f'''CREATE TABLE IF NOT EXISTS {db_file.split(".")[0]}
+                            (
+                                chat_id INTEGER PRIMARY KEY,
+                                username TEXT,
+                                permission INTEGER
+                            )''')
+        self.conn.commit()
+    @required_permission(Permissions.ADMIN)
+    def set_user_pemission(self,chat_id,chat_id_to_set_permission, permission):
+        if isinstance(permission, str):
+            permission = self.parse_permission(permission)
+        self.cursor.execute(f"UPDATE users SET permission = ? WHERE chat_id = ?", (permission, chat_id_to_set_permission))
+        self.conn.commit()
+
+    def add_user(self, chat_id, username, permission=Permissions.BASE):
+        try:
+            # Если permission передан как строка, конвертируем в число
+            if isinstance(permission, str):
+                permission = self.parse_permission(permission)
+                
+            self.cursor.execute(
+                "INSERT OR IGNORE INTO users (chat_id, username, permission) VALUES (?, ?, ?)", 
+                (chat_id, username, permission)
+            )
+            self.conn.commit()
+            
+            # Проверяем, была ли выполнена вставка
+            if self.cursor.rowcount > 0:
+                logger.info(f"Добавлен новый пользователь: {chat_id}, {username}")
+                return True
+            else:
+                logger.info(f"Пользователь уже существует: {chat_id}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Ошибка добавления пользователя {chat_id}: {e}")
+            return False
+        
     def load_comments(self):
         with open("comments.json", "r", encoding="utf-8") as f:
             comment_data = json.load(f)
@@ -114,14 +199,16 @@ class TelegramBot:
             # Удаляем записи старше 24 часов
             keys_to_remove = []
             for key, value in self.logged_msgs.items():
-                if (time.time() - self.logged_msgs.get(key, {}).get('timestamp', 0)) > 24*60*60:
+                # ИСПРАВЛЕНИЕ: получаем timestamp из value, а не через get
+                if (current_time - value.get('timestamp', 0)) > 24*60*60:
                     keys_to_remove.append(key)
             
             for key in keys_to_remove:
                 del self.logged_msgs[key]
             
             self.last_cleanup = current_time
-            logger.info(f"Очищено {len(keys_to_remove)} старых логов")
+            if keys_to_remove:
+                logger.info(f"Очищено {len(keys_to_remove)} старых логов")
 
     def process_message(self, message_data):
         """Обработка входящего сообщения"""
@@ -145,7 +232,7 @@ class TelegramBot:
 
             # Обработка личных сообщений
             elif chat_type == "private":
-                msg = self.send_message(self.logger_chat_id, f"[{datetime.datetime.now(moscow_tz).strftime("%H:%M:%S")} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')}, {text}]")
+                msg = self.send_message(self.logger_chat_id, f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')}, {text}]")
                 if msg and msg.get('ok'):
                     bot_msg_id = msg.get('result').get('message_id')
                     # Сохраняем с timestamp
@@ -167,6 +254,7 @@ class TelegramBot:
                 chat_id,
                 "Привет! Я бот для управления комментариями. Используйте команды для добавления и удаления комментариев.",
             )
+
         else:
             self.send_message(
                 chat_id,
@@ -288,6 +376,7 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Ошибка отправки ответа: {e}")
             self.send_message(chat_id, "Ошибка при отправке ответа")
+
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
         if text and not text.startswith("/"):
@@ -305,7 +394,6 @@ class TelegramBot:
             self.handle_get_user_info(chat_id,text)
         elif "/answer" in text and str(chat_id) == str(self.logger_chat_id):
             self.handle_answer(chat_id,text,message_data)
-
 
     def handle_group_message(self, message_data):
         """Обработка сообщений в группах"""
@@ -456,7 +544,7 @@ class TelegramBot:
 
 
 # Инициализация бота
-bot = TelegramBot(BOT_TOKEN, LOGGER_CHAT_ID)
+bot = TelegramBot(BOT_TOKEN, LOGGER_CHAT_ID,"users.db")
 
 
 @app.route("/tgbot/webhook", methods=["POST"])

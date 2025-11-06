@@ -4,3 +4,4 @@ banwords.py
 *.env
 *.json
 *.conf
+*.db
