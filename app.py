@@ -65,7 +65,8 @@ def required_permission(permission_level):
                     if int(result[0]) >= int(permission_level):
                         func(self, chat_id, *args, **kwargs)
                     else:
-                        return self.send_message(chat_id, "недостаточно прав")
+                        return self.send_message(chat_id, f"недостаточно прав. минимальный уровень прав \"{self.parse_permission_to_str(permission_level)}\",\
+                                                  ваши права \"{self.parse_permission_to_str(result[0])}\"")
                 else:
                     return self.send_message(
                         chat_id,
@@ -112,8 +113,8 @@ class TelegramBot:
                         f"/comment_list - список комментов - доступно от {self.parse_permission_to_str(Permissions.BASE)}\n" \
                         f"/add_comment [text | photo] [text] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
                         f"/delete_comment [text | photo] [id] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
-                        f"/set_permission [username] [permission] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n" \
-                        f"/get_user_info [chat_id | username] - доступно от {self.parse_permission_to_str(Permissions.ADMIN)}\n" \
+                        f"/set_permission [username] [permission] - доступно от {self.parse_permission_to_str(Permissions.ADMIN)}\n" \
+                        f"/get_user_info [chat_id | username] - доступно от {self.parse_permission_to_str(Permissions.DEV)}\n" \
                         f"/answer [text] - уникальная команда - доступно от логгер"
 
     @staticmethod
@@ -256,6 +257,7 @@ class TelegramBot:
                 )
             except Exception as e:
                 self.send_message(chat_id, f"ошибка {type(e).__name__}")
+
         elif (self.get_user_permission(chat_id) == Permissions.DEV and not self.get_user_permission(chat_id_to_set_permission) == Permissions.DEV)\
             or str(chat_id) == str(self.logger_chat_id):
             try:
@@ -273,7 +275,7 @@ class TelegramBot:
             except Exception as e:
                 self.send_message(chat_id, f"ошибка {type(e).__name__}")
         else:
-            self.send_message(chat_id, "ты чо балбес чтоль")
+            self.send_message(chat_id, "ты чо балбес чтоль где то по условиям не сошлось")
 
     def add_user(self, chat_id, username, permission=Permissions.BASE):
         try:
@@ -290,13 +292,18 @@ class TelegramBot:
             # Проверяем, была ли выполнена вставка
             if self.cursor.rowcount > 0:
                 logger.info(f"Добавлен новый пользователь: {chat_id}, {username}")
+                self.send_message(chat_id, "Вы успешно зарегистрированы!")
+                self.send_message(self.logger_chat_id, f"Новый пользователь: @{self.get_chat_info(chat_id).get('username')}")
                 return True
             else:
                 logger.info(f"Пользователь уже существует: {chat_id}")
+                self.send_message(chat_id, "Вы уже зарегистрированы!")
                 return False
 
         except Exception as e:
             logger.error(f"Ошибка добавления пользователя {chat_id}: {e}")
+            self.send_message(self.logger_chat_id, f"Ошибка добавления пользователя {chat_id}: {e}")
+            self.send_message(chat_id, "Произошла ошибка при регистрации. Попробуйте позже.")
             return False
 
     def load_comments(self):
@@ -444,13 +451,19 @@ class TelegramBot:
             comment_type = text.split()[1]
             comment_text = " ".join(text.split()[2:])
             if comment_type == "text":
-                self.text_comments.append(comment_text)
-                self.send_message(
-                    chat_id, f"Добавлен текстовый комментарий: {comment_text}"
-                )
+                if comment_text not in self.text_comments:
+                    self.text_comments.append(comment_text)
+                    self.send_message(
+                        chat_id, f"Добавлен текстовый комментарий: {comment_text}"
+                    )
+                else:
+                    self.send_message(chat_id, "такой комментарий уже существует")
             elif comment_type == "photo":
-                self.photo_comments.append(comment_text)
-                self.send_message(chat_id, f"Добавлен фото-комментарий: {comment_text}")
+                if comment_text not in self.photo_comments:
+                    self.photo_comments.append(comment_text)
+                    self.send_message(chat_id, f"Добавлен фото-комментарий: {comment_text}")
+                else:
+                    self.send_message(chat_id, "такой комментарий уже существует")
             else:
                 self.send_message(
                     chat_id,
@@ -650,6 +663,7 @@ class TelegramBot:
             self.handle_get_users_list(chat_id)
         elif text.startswith("/help"):
             self.handle_help(chat_id)
+    
     def get_forwarded_channel_info(self, message_data):
         """Получает информацию о канале, из которого переслано сообщение"""
         try:
@@ -667,6 +681,16 @@ class TelegramBot:
         text = message_data.get("text", "")
         caption = message_data.get("caption", "")
 
+        self.cursor.execute(f'''CREATE TABLE IF NOT EXISTS
+                                {str(chat_id)}(
+                                chat_id INTEGER PRIMARY KEY,
+                                username STRING
+                                permission INTEGER DEFAULT 0
+                                )
+                                ''')
+        
+
+        
         logger.info(
             f"Группа '{message_data['chat'].get('title', 'Unknown')}': сообщение {message_id}"
         )
@@ -702,7 +726,7 @@ class TelegramBot:
         caption = message_data.get("caption", "")
         msg = self.send_message(
             self.logger_chat_id,
-            f"СООБЩЕНИЕ ИЗ КАНАЛА {self.get_forwarded_channel_info(message_data)} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {caption or message_data.get('text', 'нет текста')}]",
+            f"СООБЩЕНИЕ ИЗ КАНАЛА {self.get_forwarded_channel_info(message_data)} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} (```{chat_id}```), {caption or message_data.get('text', 'нет текста')}]",
         )
         if msg and msg.get("ok"):
             bot_msg_id = msg.get("result").get("message_id")
