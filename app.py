@@ -358,27 +358,7 @@ class TelegramBot:
             logger.error(f"Ошибка установки реакции: {e}")
             return None
 
-    def cleanup_old_logs(self):
-        """Очистка старых логов"""
-        current_time = time.time()
-        if current_time - self.last_cleanup > 3600:  # Каждый час
-            # Удаляем записи старше 24 часов
-            keys_to_remove = []
-            for key, value in self.logged_msgs.items():
-                if (current_time - value.get("timestamp", 0)) > 24 * 60 * 60:
-                    keys_to_remove.append(key)
-
-            for key in keys_to_remove:
-                del self.logged_msgs[key]
-
-            self.last_cleanup = current_time
-            if keys_to_remove:
-                logger.info(f"Очищено {len(keys_to_remove)} старых логов")
-                self.send_message(
-                    self.logger_chat_id,
-                    f"Очищено {len(keys_to_remove)} старых логов",
-                )
-                self.save_logged_msgs()
+    
 
     def process_message(self, message_data):
         """Обработка входящего сообщения"""
@@ -406,23 +386,24 @@ class TelegramBot:
 
             # Обработка личных сообщений
             elif chat_type == "private":
-                msg = self.send_message(
-                    self.logger_chat_id,
-                    f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {text}]",
-                )
-                if msg and msg.get("ok"):
-                    bot_msg_id = msg.get("result").get("message_id")
-                    # Сохраняем с timestamp
-                    self.logged_msgs[str(bot_msg_id)] = {
-                        "chat_id": chat_id,
-                        "message_id": message_id,
-                        "timestamp": time.time(),
-                    }
-                    self.save_logged_msgs()
-                    self.cleanup_old_logs()  # Периодическая очистка
-                    return self.handle_private_message(
-                        chat_id, text, message_id, message_data
+                if not str(chat_id) == str(self.logger_chat_id):
+                    msg = self.send_message(
+                        self.logger_chat_id,
+                        f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {text}]",
                     )
+                    if msg and msg.get("ok"):
+                        bot_msg_id = msg.get("result").get("message_id")
+                        # Сохраняем с timestamp
+                        self.logged_msgs[str(bot_msg_id)] = {
+                            "chat_id": chat_id,
+                            "message_id": message_id,
+                            "timestamp": time.time(),
+                        }
+                        self.save_logged_msgs()
+                        
+                return self.handle_private_message(
+                    chat_id, text, message_id, message_data
+                )
 
         except Exception as e:
             logger.error(f"Ошибка обработки сообщения: {e}")
@@ -581,7 +562,7 @@ class TelegramBot:
 
         # ПРЕОБРАЗУЕМ В СТРОКУ для поиска в JSON
         replied_message_id_str = str(replied_message_id)
-
+        self.load_logged_msgs()
         # Проверяем, есть ли такой message_id в logged_msgs
         if replied_message_id_str not in self.logged_msgs:
             self.send_message(
@@ -663,7 +644,6 @@ class TelegramBot:
             self.handle_get_users_list(chat_id)
         elif text.startswith("/help"):
             self.handle_help(chat_id)
-    
     def get_forwarded_channel_info(self, message_data):
         """Получает информацию о канале, из которого переслано сообщение"""
         try:
@@ -681,16 +661,6 @@ class TelegramBot:
         text = message_data.get("text", "")
         caption = message_data.get("caption", "")
 
-        self.cursor.execute(f'''CREATE TABLE IF NOT EXISTS
-                                {str(chat_id)}(
-                                chat_id INTEGER PRIMARY KEY,
-                                username STRING
-                                permission INTEGER DEFAULT 0
-                                )
-                                ''')
-        
-
-        
         logger.info(
             f"Группа '{message_data['chat'].get('title', 'Unknown')}': сообщение {message_id}"
         )
@@ -705,6 +675,19 @@ class TelegramBot:
             logger.info("Обнаружено пересланное сообщение!")
             return self.handle_forwarded_message(message_data)
         else:
+            msg = self.send_message(
+                    self.logger_chat_id,
+                    f"СООБЩЕНИЕ ИЗ ГРУППЫ {self.get_forwarded_channel_info(message_data)}\n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {text}]",
+                )
+            if msg and msg.get("ok"):
+                bot_msg_id = msg.get("result").get("message_id")
+                # Сохраняем с timestamp
+                self.logged_msgs[str(bot_msg_id)] = {
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "timestamp": time.time(),
+                }
+                self.save_logged_msgs()
             # Проверка запрещенных слов в обычных сообщениях
             if text:
                 return self.check_banwords(chat_id, text, message_id)
@@ -726,7 +709,7 @@ class TelegramBot:
         caption = message_data.get("caption", "")
         msg = self.send_message(
             self.logger_chat_id,
-            f"СООБЩЕНИЕ ИЗ КАНАЛА {self.get_forwarded_channel_info(message_data)} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} (```{chat_id}```), {caption or message_data.get('text', 'нет текста')}]",
+            f"СООБЩЕНИЕ ИЗ КАНАЛА {self.get_forwarded_channel_info(message_data)} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {caption or message_data.get('text', 'нет текста')}]",
         )
         if msg and msg.get("ok"):
             bot_msg_id = msg.get("result").get("message_id")
@@ -737,7 +720,6 @@ class TelegramBot:
                 "timestamp": time.time(),
             }
             self.save_logged_msgs()
-            self.cleanup_old_logs()  # Периодическая очистка
 
         if not hasattr(self, "prevcomment"):
             self.prevcomment = ""
