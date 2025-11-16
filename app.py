@@ -524,23 +524,22 @@ class TelegramBot:
 
     @required_permission(Permissions.ADMIN)
     def handle_get_user_info(self, chat_id, text):
-        if str(chat_id) == str(self.logger_chat_id):
-            find_chat = text.split()[1]
-            if isinstance(find_chat, str):
-                try:
-                    find_chat = self.get_chat_id_by_username(find_chat)
-                except ValueError:
-                    return self.send_message(chat_id, "Пользователь не найден")
-            if find_chat is None:
+        
+        find_chat = text.split()[1]
+        if isinstance(find_chat, str):
+            try:
+                find_chat = self.get_chat_id_by_username(find_chat)
+            except ValueError:
                 return self.send_message(chat_id, "Пользователь не найден")
-            user_info = self.get_chat_info(find_chat)
-            logger.info(find_chat, user_info, chat_id)
-            self.send_message(
-                self.logger_chat_id,
-                f"данные по чату {find_chat}:\nID: {user_info['id']}\nИмя: {user_info.get('first_name', 'Не указано')}\nФамилия: {user_info.get('last_name', 'Не указана')}\nUsername: @{user_info.get('username', 'Не указан')}",
-            )
-        else:
-            self.send_message(chat_id, "Недостаточно прав")
+        if find_chat is None:
+            return self.send_message(chat_id, "Пользователь не найден")
+        user_info = self.get_chat_info(find_chat)
+        logger.info(find_chat, user_info, chat_id)
+        self.send_message(
+            self.logger_chat_id,
+            f"данные по чату {find_chat}:\nID: {user_info['id']}\nИмя: {user_info.get('first_name', 'Не указано')}\nФамилия: {user_info.get('last_name', 'Не указана')}\nUsername: @{user_info.get('username', 'Не указан')}",
+        )
+
 
     @required_permission(Permissions.DEV)
     def handle_answer(self, chat_id, text, message_data):
