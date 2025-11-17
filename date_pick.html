@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Выбор даты для комментария</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #ffffff;
+        }
+        .container {
+            max-width: 320px;
+            margin: 0 auto;
+        }
+        h2 {
+            text-align: center;
+            color: #000000;
+            margin-bottom: 20px;
+            font-size: 18px;
+        }
+        .date-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #0088cc;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+        }
+        .message-input {
+            width: 100%;
+            padding: 12px;
+            font-size: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            box-sizing: border-box;
+            min-height: 80px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .confirm-btn {
+            width: 100%;
+            padding: 12px;
+            background: #0088cc;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .confirm-btn:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+        .info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #666;
+            border-left: 4px solid #0088cc;
+        }
+        .label {
+            font-weight: 500;
+            margin-bottom: 5px;
+            display: block;
+            color: #333;
+        }
+        /* Стили для уведомлений */
+        .notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 0.3s;
+            max-width: 300px;
+            text-align: center;
+        }
+        .notification.success {
+            background: #28a745;
+            color: white;
+        }
+        .notification.error {
+            background: #dc3545;
+            color: white;
+        }
+        .notification.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Запланировать комментарий</h2>
+        
+        <label class="label">Дата отправки:</label>
+        <input type="date" id="datePicker" class="date-input">
+        
+        <label class="label">Текст комментария:</label>
+        <textarea id="messageInput" class="message-input" placeholder="Введите текст, который будет добавлен к комментариям в указанную дату..."></textarea>
+        
+        <button id="confirmBtn" class="confirm-btn" disabled>скопировать комманду</button>
+        
+        <div class="info">
+            <strong>Как это работает:</strong><br>
+            скопируйте команду и вставьте в бота
+            в выбранную дату бот дополнительно будет писать текст в комментарии
+        </div>
+    </div>
+
+    
+    <div id="notification" class="notification"></div>
+
+    <script>
+        const datePicker = document.getElementById('datePicker');
+        const messageInput = document.getElementById('messageInput');
+        const confirmBtn = document.getElementById('confirmBtn');
+        const notification = document.getElementById('notification');
+
+        const today = new Date();
+        datePicker.min = today.toISOString().split('T')[0];
+
+        function check_form(){
+            const IsDate = datePicker.value !== '';
+            const IsMsg  = messageInput.value !== '';
+            confirmBtn.disabled = !(IsDate && IsMsg)
+        }
+
+        function showNotification(message, type) {
+            notification.textContent = message;
+            notification.className = `notification ${type}`;
+            notification.classList.add('show');
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function send_notify(text){
+            showNotification(text, 'success');
+        }
+
+        function send_error(text){
+            showNotification(text, 'error');
+        }
+
+        datePicker.addEventListener('change', check_form);
+        messageInput.addEventListener('input', check_form);
+
+        confirmBtn.addEventListener("click", async function(){
+            try {
+                
+                const text = `/set_schedule_comment ${datePicker.value.replaceAll(".","-")} ${messageInput.value}`;
+                
+                
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                    send_notify('команда скопирована');
+                } else {
+                
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        send_notify('команда скопирована');
+                    } else {
+                        send_error('не удалось скопировать команду');
+                    }
+                }
+            } catch (error) {
+                console.error('Ошибка при копировании:', error);
+                send_error('Ошибка при копировании: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>
