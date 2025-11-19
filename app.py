@@ -6,7 +6,7 @@ import pytz  # нужно установить: pip install pytz
 moscow_tz = pytz.timezone("Europe/Moscow")
 
 from faker import Faker
-from flask import Flask, request, jsonify,send_from_directory
+from flask import Flask, request, jsonify,send_from_directory,render_template
 import requests
 import os
 import logging
@@ -456,22 +456,38 @@ class TelegramBot:
             # Обработка личных сообщений
             elif chat_type == "private":
                 if not str(chat_id) == str(self.logger_chat_id):
+                    chat_info = self.get_chat_info(chat_id)
+                    username = chat_info.get('username', 'неизвестно') if isinstance(chat_info, dict) else 'неизвестно'
                     msg = self.send_message(
                         self.logger_chat_id,
-                        f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{self.get_chat_info(chat_id).get('username', 'неизвестно')} ({chat_id}), {text}]",
+                        f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{username} ({chat_id}), {text}]",
                     )
                     if msg:
-                        for res in msg:
-                            logger.info(res)
-                            if res.get("ok"):
-                                bot_msg_id = res.get("result").get("message_id")
-                                # Сохраняем с timestamp
+                        # Обрабатываем как список результатов
+                        if isinstance(msg, list):
+                            for res in msg:
+                                logger.info(res)
+                                if res and isinstance(res, dict) and res.get("ok"):
+                                    bot_msg_id = res.get("result", {}).get("message_id")
+                                    if bot_msg_id:
+                                        self.logged_msgs[str(bot_msg_id)] = {
+                                            "chat_id": chat_id,
+                                            "message_id": message_id,
+                                            "timestamp": time.time(),
+                                            "text": text
+                                        }
+                        # Обрабатываем как одиночный результат
+                        elif isinstance(msg, dict) and msg.get("ok"):
+                            bot_msg_id = msg.get("result", {}).get("message_id")
+                            if bot_msg_id:
                                 self.logged_msgs[str(bot_msg_id)] = {
                                     "chat_id": chat_id,
                                     "message_id": message_id,
                                     "timestamp": time.time(),
+                                    "text": text
                                 }
-                                self.save_logged_msgs()
+                        
+                        self.save_logged_msgs()
 
                 return self.handle_private_message(
                     chat_id, text, message_id, message_data
@@ -628,13 +644,16 @@ class TelegramBot:
         find_chat = text.split()[1]
         if isinstance(find_chat, str):
             try:
-                find_chat = self.get_chat_id_by_username(find_chat)
+                find_chat = int(find_chat)
             except ValueError:
-                return self.send_message(chat_id, "Пользователь не найден")
+                try:
+                    find_chat = self.get_chat_id_by_username(find_chat)
+                except ValueError:
+                    return self.send_message(chat_id, "Пользователь не найден")
         if find_chat is None:
             return self.send_message(chat_id, "Пользователь не найден")
         user_info = self.get_chat_info(find_chat)
-        logger.info(find_chat, user_info, chat_id)
+        logger.info(f"{find_chat}, {user_info}, {chat_id}")
         self.send_message(
             self.logger_chat_id,
             f"данные по чату {find_chat}:\nID: {user_info['id']}\nИмя: {user_info.get('first_name', 'Не указано')}\nФамилия: {user_info.get('last_name', 'Не указана')}\nUsername: @{user_info.get('username', 'Не указан')}",
@@ -826,9 +845,9 @@ class TelegramBot:
             logger.info("Обнаружено пересланное сообщение!")
             return self.handle_forwarded_message(message_data)
         else:
-            # Получаем информацию о пользователе
+            # ИСПРАВЛЕНИЕ: Безопасное получение username
             from_user = message_data.get('from', {})
-            username = from_user.get('username', 'неизвестно')
+            username = from_user.get('username', 'неизвестно') if isinstance(from_user, dict) else 'неизвестно'
             
             channel_info = self.get_forwarded_channel_info(message_data)
             channel_text = f"СООБЩЕНИЕ ИЗ ГРУППЫ {channel_info}" if channel_info else "СООБЩЕНИЕ ИЗ ГРУППЫ"
@@ -843,13 +862,14 @@ class TelegramBot:
                 # Если сообщение было разбито на части, msg_result будет списком
                 if isinstance(msg_result, list):
                     for result in msg_result:
-                        if result and result.get("ok"):
+                        if result and isinstance(result, dict) and result.get("ok"):
                             bot_msg_id = result.get("result", {}).get("message_id")
                             if bot_msg_id:
                                 self.logged_msgs[str(bot_msg_id)] = {
                                     "chat_id": chat_id,
                                     "message_id": message_id,
                                     "timestamp": time.time(),
+                                    "text": caption or text or 'нет текста'
                                 }
                 # Если одно сообщение
                 elif isinstance(msg_result, dict) and msg_result.get("ok"):
@@ -859,6 +879,7 @@ class TelegramBot:
                             "chat_id": chat_id,
                             "message_id": message_id,
                             "timestamp": time.time(),
+                            "text": caption or text or 'нет текста'
                         }
                 
                 self.save_logged_msgs()
@@ -883,17 +904,14 @@ class TelegramBot:
         message_id = message_data["message_id"]
         media_group_id = message_data.get("media_group_id")
         caption = message_data.get("caption", "")
-        chat_info = self.get_chat_info(chat_id)
-        username = "неизвестно"
         
+        # ИСПРАВЛЕНИЕ: Безопасное получение username
+        chat_info = self.get_chat_info(chat_id)
         if isinstance(chat_info, dict):
             username = chat_info.get('username', 'неизвестно')
-        elif isinstance(chat_info, str):
-            username = chat_info
         else:
             from_user = message_data.get('from', {})
-            if isinstance(from_user, dict):
-                username = from_user.get('username', 'неизвестно')
+            username = from_user.get('username', 'неизвестно') if isinstance(from_user, dict) else 'неизвестно'
         
         channel_info = self.get_forwarded_channel_info(message_data)
         channel_text = f"СООБЩЕНИЕ ИЗ КАНАЛА {channel_info}" if channel_info else "СООБЩЕНИЕ ИЗ КАНАЛА"
@@ -906,13 +924,14 @@ class TelegramBot:
         if msg_result:
             if isinstance(msg_result, list):
                 for result in msg_result:
-                    if result and result.get("ok"):
+                    if result and isinstance(result, dict) and result.get("ok"):
                         bot_msg_id = result.get("result", {}).get("message_id")
                         if bot_msg_id:
                             self.logged_msgs[str(bot_msg_id)] = {
                                 "chat_id": chat_id,
                                 "message_id": message_id,
                                 "timestamp": time.time(),
+                                "text": caption or message_data.get('text', 'нет текста')
                             }
             elif isinstance(msg_result, dict) and msg_result.get("ok"):
                 bot_msg_id = msg_result.get("result", {}).get("message_id")
@@ -921,6 +940,7 @@ class TelegramBot:
                         "chat_id": chat_id,
                         "message_id": message_id,
                         "timestamp": time.time(),
+                        "text": caption or message_data.get('text', 'нет текста')
                     }
             
             self.save_logged_msgs()
@@ -1150,6 +1170,29 @@ def test():
 def date_picker():
     return send_from_directory(".","date_pick.html")
 
+@app.route("/tgbot/deleted_logs", methods=["POST"])
+def deleted_logs():
+    if not request.get_json():
+        return jsonify({"error": "No JSON data received"}), 400
+    else:
+        try:
+            data = request.get_json()
+            with open("deleted_logs.json", "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            logger.info(f"Получены данные об удалении {data.get('total', 0)} логов")
+            return jsonify({"status": "success", "received": data.get('total', 0)})
+        except Exception as e:
+            logger.error(f"Ошибка обработки deleted_logs: {e}")
+            return jsonify({"error": "Internal server error"}), 500
+
+@app.route("/tgbot/deleted_logs", methods=["GET"])
+def show_deleted_logs():
+    try:
+        with open("deleted_logs.json", "r", encoding="utf-8") as f:
+            del_logs = json.load(f)
+        return render_template("del_logs.html", del_logs=del_logs)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        return render_template("del_logs.html", del_logs={"error": "No logs found"})
 
 @app.route("/")
 def index():

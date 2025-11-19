@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Удаленные логи</title>
+</head>
+<body>
+    {% if del_logs.get("error") %}
+       <h1>Ошибка</h1>
+       <p>{{ del_logs.error }}</p>
+    {% else %}
+        <h1>Удаленные логи</h1>
+        <p>Всего удалено: {{ del_logs.total if del_logs.total is defined else 0 }}</p>
+        <p>Последние удаленные логи:</p>
+        <ul>
+        {% for log in del_logs.get("logs", []) %}
+           <li>chat_id: {{ log.chat_id }} | message_id: {{ log.message_id }} | deleted at: {{ log.deleted_at }} {{ log.text }}</li>
+        {% endfor %}
+        </ul>
+    {% endif %}
+</body>
+
+<style>
+    body{
+        background: rgb(36, 33, 33);
+        border-radius: 5px;
+        margin: 5%;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        padding: 10px;
+        color: white;
+    }
+
+    ul{
+        margin: 5%;
+        background: rgb(68, 172, 190);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        border-radius: 5px;
+        padding: 10px;
+        list-style-type: none;
+        color: white;
+        font-size: 20px;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        text-decoration: none;
+    }
+
+    li{
+        margin: 5%;
+        background: rgb(68, 172, 190);
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+        border-radius: 5px;
+        padding: 10px;
+        list-style-type: none;
+        color: white;
+        font-size: 20px;
+        font-family: Arial, sans-serif;
+        text-align: center;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        text-decoration: none;
+        transition: background-color 0.3s ease;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-block;
+        width: 80%;
+        border-radius: 10px;
+        border: 2px solid #44ACBE;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+    }
+</style>
+</html>
