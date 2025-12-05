@@ -1,72 +1,1227 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Удаленные логи</title>
+    <title>История очистки логов</title>
+    
+    <!-- ВСТАВЬТЕ ВЕСЬ CSS КОД ЗДЕСЬ -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            background: white;
+        }
+
+        /* Мобильный заголовок */
+        .mobile-header {
+            display: none;
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+
+        .mobile-header h1 {
+            font-size: 1.2em;
+            text-align: center;
+            color: #3498db;
+        }
+
+        .mobile-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 10px;
+            font-size: 0.9em;
+        }
+
+        .stat-badge {
+            background: #34495e;
+            padding: 5px 10px;
+            border-radius: 15px;
+            text-align: center;
+        }
+
+        .stat-number {
+            font-weight: bold;
+            color: #3498db;
+        }
+
+        /* Боковая панель - десктоп */
+        .sidebar {
+            width: 100%;
+            background: #2c3e50;
+            color: white;
+            padding: 0;
+            border-bottom: 3px solid #34495e;
+        }
+
+        .sidebar-header {
+            background: #1a252f;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 3px solid #3498db;
+        }
+
+        .sidebar-header h1 {
+            font-size: 1.3em;
+            margin-bottom: 8px;
+            color: #3498db;
+        }
+
+        .sidebar-header p {
+            color: #bdc3c7;
+            font-size: 0.9em;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            padding: 15px;
+            background: #34495e;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 10px;
+            background: #2c3e50;
+            border-radius: 8px;
+            border: 1px solid #4a6572;
+        }
+
+        .stat-number {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #3498db;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.8em;
+            color: #bdc3c7;
+            margin-top: 3px;
+        }
+
+        .cleanup-list {
+            display: flex;
+            overflow-x: auto;
+            padding: 10px;
+            gap: 10px;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+        }
+
+        .cleanup-list::-webkit-scrollbar {
+            height: 6px;
+        }
+
+        .cleanup-list::-webkit-scrollbar-track {
+            background: #34495e;
+            border-radius: 3px;
+        }
+
+        .cleanup-list::-webkit-scrollbar-thumb {
+            background: #3498db;
+            border-radius: 3px;
+        }
+
+        .cleanup-item {
+            flex: 0 0 auto;
+            width: 140px;
+            padding: 15px;
+            background: #34495e;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            text-align: center;
+            position: relative;
+        }
+
+        .cleanup-item:hover {
+            background: #3d566e;
+        }
+
+        .cleanup-item.active {
+            background: #3498db;
+            border-color: #2980b9;
+            transform: scale(1.05);
+        }
+
+        .cleanup-date {
+            font-weight: bold;
+            font-size: 0.9em;
+            margin-bottom: 5px;
+            color: #ecf0f1;
+        }
+
+        .cleanup-count {
+            color: #bdc3c7;
+            font-size: 0.8em;
+        }
+
+        .cleanup-item.active .cleanup-count {
+            color: #ecf0f1;
+        }
+
+        .delete-cleanup-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 12px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .delete-cleanup-btn:hover {
+            opacity: 1;
+        }
+
+        /* Основное содержимое */
+        .main-content {
+            flex: 1;
+            padding: 0;
+            background: #ecf0f1;
+            overflow-y: auto;
+        }
+
+        .content-header {
+            background: white;
+            padding: 20px 15px;
+            border-bottom: 1px solid #bdc3c7;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            position: relative;
+        }
+
+        .content-header h2 {
+            color: #2c3e50;
+            font-size: 1.3em;
+            margin-bottom: 5px;
+        }
+
+        .timestamp {
+            color: #7f8c8d;
+            font-size: 0.85em;
+        }
+
+        .delete-all-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            font-size: 0.8em;
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .delete-all-btn:hover {
+            opacity: 1;
+        }
+
+        .logs-container {
+            padding: 20px 15px;
+        }
+
+        .no-selection {
+            text-align: center;
+            padding: 40px 20px;
+            color: #7f8c8d;
+        }
+
+        .no-selection i {
+            font-size: 3em;
+            margin-bottom: 15px;
+            color: #bdc3c7;
+        }
+
+        .logs-grid {
+            display: grid;
+            gap: 12px;
+        }
+
+        .log-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #3498db;
+            transition: transform 0.2s ease;
+            position: relative;
+        }
+
+        .log-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .log-header {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            margin-bottom: 10px;
+            padding-right: 30px;
+        }
+
+        .log-meta {
+            color: #7f8c8d;
+            font-size: 0.8em;
+        }
+
+        .log-content {
+            color: #2c3e50;
+            line-height: 1.4;
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 6px;
+            border-left: 3px solid #e9ecef;
+            font-size: 0.9em;
+            word-break: break-word;
+        }
+
+        .reply-log-btn {
+            position: absolute;
+            top: 10px;
+            right: 70px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-size: 14px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .reply-log-btn:hover {
+            opacity: 1;
+            background: #219653;
+        }
+
+        .delete-log-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 25px;
+            height: 25px;
+            font-size: 14px;
+            cursor: pointer;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .delete-log-btn:hover {
+            opacity: 1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 30px 20px;
+            color: #7f8c8d;
+        }
+
+        .empty-state i {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            color: #bdc3c7;
+        }
+
+        /* Модальное окно */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 10% auto;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateY(-30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #3498db;
+        }
+
+        .modal-header h3 {
+            color: #2c3e50;
+            margin: 0;
+            font-size: 1.2em;
+        }
+
+        .close-modal {
+            background: none;
+            border: none;
+            font-size: 1.5em;
+            cursor: pointer;
+            color: #7f8c8d;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background-color 0.2s;
+        }
+
+        .close-modal:hover {
+            background-color: #f1f2f6;
+            color: #e74c3c;
+        }
+
+        .original-message {
+            background: #f8f9fa;
+            border-left: 3px solid #3498db;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-size: 0.9em;
+            color: #2c3e50;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+
+        .reply-textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            margin-bottom: 15px;
+            transition: border-color 0.2s;
+        }
+
+        .reply-textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+
+        .reply-buttons {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #2980b9;
+        }
+
+        .btn-secondary {
+            background-color: #95a5a6;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #7f8c8d;
+        }
+
+        .btn-success {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background-color: #219653;
+        }
+
+        .btn-copy {
+            background-color: #9b59b6;
+            color: white;
+            margin-right: auto;
+        }
+
+        .btn-copy:hover {
+            background-color: #8e44ad;
+        }
+
+        .message-info {
+            color: #7f8c8d;
+            font-size: 0.85em;
+            margin-bottom: 5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .message-text {
+            font-style: italic;
+        }
+
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .log-card {
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* Десктоп стили */
+        @media (min-width: 768px) {
+            .container {
+                flex-direction: row;
+                max-width: 1400px;
+                margin: 0 auto;
+                box-shadow: 0 0 30px rgba(0, 0, 0, 0.3);
+            }
+
+            .mobile-header {
+                display: none;
+            }
+
+            .sidebar {
+                width: 350px;
+                height: 100vh;
+                position: sticky;
+                top: 0;
+                overflow-y: auto;
+                border-bottom: none;
+                border-right: 3px solid #34495e;
+            }
+
+            .cleanup-list {
+                display: block;
+                overflow-x: visible;
+                padding: 0;
+            }
+
+            .cleanup-item {
+                width: auto;
+                margin: 0;
+                border-radius: 0;
+                text-align: left;
+                border: none;
+                border-bottom: 1px solid #34495e;
+                padding: 15px 40px 15px 15px;
+            }
+
+            .cleanup-item:last-child {
+                border-bottom: none;
+            }
+
+            .log-header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: flex-start;
+            }
+            
+            .reply-log-btn {
+                right: 70px;
+            }
+        }
+
+        /* Большие мобильные устройства */
+        @media (min-width: 480px) and (max-width: 767px) {
+            .cleanup-item {
+                width: 160px;
+            }
+            
+            .content-header {
+                padding: 20px;
+            }
+            
+            .logs-container {
+                padding: 20px;
+            }
+            
+            .reply-log-btn {
+                right: 40px;
+                width: 30px;
+                height: 30px;
+                font-size: 16px;
+            }
+        }
+
+        /* На мобильных устройствах */
+        @media (max-width: 767px) {
+            .mobile-header {
+                display: block;
+            }
+            
+            .reply-log-btn {
+                right: 40px;
+                width: 30px;
+                height: 30px;
+                font-size: 16px;
+            }
+        }
+
+        /* Улучшения для касаний */
+        @media (hover: none) {
+            .cleanup-item:hover {
+                background: #34495e;
+            }
+            
+            .cleanup-item.active:hover {
+                background: #3498db;
+            }
+            
+            .log-card:hover {
+                transform: none;
+            }
+            
+            .delete-cleanup-btn,
+            .delete-log-btn,
+            .delete-all-btn,
+            .reply-log-btn {
+                opacity: 1;
+            }
+        }
+
+        /* Поддержка темной темы */
+        @media (prefers-color-scheme: dark) {
+            .main-content {
+                background: #1a1a1a;
+            }
+            
+            .content-header {
+                background: #2d2d2d;
+                border-bottom-color: #444;
+            }
+            
+            .content-header h2 {
+                color: #fff;
+            }
+            
+            .log-card {
+                background: #2d2d2d;
+                color: #fff;
+            }
+            
+            .log-content {
+                background: #3d3d3d;
+                color: #fff;
+                border-left-color: #555;
+            }
+            
+            .modal-content {
+                background: #2d2d2d;
+                color: #fff;
+            }
+            
+            .original-message {
+                background: #3d3d3d;
+                color: #fff;
+            }
+            
+            .reply-textarea {
+                background: #3d3d3d;
+                color: #fff;
+                border-color: #555;
+            }
+        }
+    </style>
 </head>
 <body>
-    {% if del_logs.get("error") %}
-       <h1>Ошибка</h1>
-       <p>{{ del_logs.error }}</p>
-    {% else %}
-        <h1>Удаленные логи</h1>
-        <p>Всего удалено: {{ del_logs.total if del_logs.total is defined else 0 }}</p>
-        <p>Последние удаленные логи:</p>
-        <ul>
-        {% for log in del_logs.get("logs", []) %}
-           <li>chat_id: {{ log.chat_id }} | message_id: {{ log.message_id }} | deleted at: {{ log.deleted_at }} {{ log.text }}</li>
-        {% endfor %}
-        </ul>
-    {% endif %}
+    <!-- Мобильный заголовок -->
+    <div class="mobile-header">
+        <h1>🗑️ История очистки</h1>
+        <div class="mobile-stats">
+            <div class="stat-badge">
+                <span class="stat-number">{{ history.total_cleanups }}</span>
+                <div class="stat-label">Очисток</div>
+            </div>
+            <div class="stat-badge">
+                <span class="stat-number">{{ history.total_deleted }}</span>
+                <div class="stat-label">Удалено</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Боковая панель -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h1>🗑️ История очистки</h1>
+                <p>Управление логами</p>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-number">{{ history.total_cleanups }}</span>
+                    <span class="stat-label">Всего очисток</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-number">{{ history.total_deleted }}</span>
+                    <span class="stat-label">Всего удалено</span>
+                </div>
+            </div>
+
+            <div class="cleanup-list">
+                {% for cleanup in history.cleanups %}
+                <div class="cleanup-item" data-cleanup-id="{{ cleanup.id }}">
+                    <button class="delete-cleanup-btn" data-cleanup-id="{{ cleanup.id }}">×</button>
+                    <div class="cleanup-date">{{ cleanup.date_display }}</div>
+                    <div class="cleanup-count">{{ cleanup.total }} записей</div>
+                </div>
+                {% endfor %}
+                
+                {% if not history.cleanups %}
+                <div class="empty-state">
+                    <div>📊</div>
+                    <p>Нет данных об очистках</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Основное содержимое -->
+        <div class="main-content">
+            <div class="content-header">
+                <h2 id="selected-title">История очистки логов</h2>
+                <div class="timestamp" id="selected-timestamp">Выберите запись из списка для просмотра деталей</div>
+                <button class="delete-all-btn" id="delete-all-btn" style="display: none;">Удалить всю очистку</button>
+            </div>
+
+            <div class="logs-container">
+                <div id="no-selection" class="no-selection">
+                    <div>👆</div>
+                    <h3>Выберите очистку из списка</h3>
+                    <p>Для просмотра деталей выберите запись об очистке</p>
+                </div>
+
+                <div id="logs-content" style="display: none;">
+                    <div id="logs-grid" class="logs-grid">
+                        <!-- Логи будут загружаться здесь -->
+                    </div>
+                </div>
+
+                <div id="empty-cleanup" class="empty-state" style="display: none;">
+                    <div>✅</div>
+                    <h3>Нет удаленных записей</h3>
+                    <p>В этой очистке не было удалено ни одной записи</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно для ответа -->
+    <div id="replyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>↩️ Ответить на сообщение</h3>
+                <button class="close-modal">×</button>
+            </div>
+            <div id="originalMessagePreview" class="original-message">
+                <!-- Оригинальное сообщение будет вставлено здесь -->
+            </div>
+            <textarea 
+                id="replyText" 
+                class="reply-textarea" 
+                placeholder="Введите текст ответа..."
+                maxlength="4000"
+            ></textarea>
+            <div class="reply-buttons">
+                <button class="btn btn-copy" id="copyOriginalBtn">📋 Копировать оригинал</button>
+                <button class="btn btn-secondary" id="cancelReplyBtn">Отмена</button>
+                <button class="btn btn-primary" id="sendReplyBtn">Отправить ответ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ВСТАВЬТЕ ВЕСЬ JS КОД ЗДЕСЬ -->
+    <script>
+    // Передаем данные из Jinja в JavaScript
+    window.historyData = {{ history.cleanups | tojson }};
+    
+    class LogHistoryManager {
+        constructor() {
+            this.currentCleanupId = null;
+            this.currentReplyCleanupId = null;
+            this.currentReplyLogId = null;
+            this.cleanups = window.historyData || [];
+            
+            this.init();
+        }
+        
+        init() {
+            this.bindEvents();
+            this.selectFirstCleanup();
+            this.initCleanupListScroll();
+        }
+        
+        bindEvents() {
+            // Обработчики для элементов очистки
+            document.querySelectorAll('.cleanup-item').forEach(item => {
+                item.addEventListener('click', (e) => {
+                    if (!e.target.classList.contains('delete-cleanup-btn')) {
+                        const cleanupId = item.dataset.cleanupId;
+                        this.showCleanup(cleanupId);
+                    }
+                });
+            });
+            
+            // Кнопки удаления очистки
+            document.querySelectorAll('.delete-cleanup-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const cleanupId = btn.dataset.cleanupId;
+                    if (cleanupId) {
+                        this.deleteCleanup(cleanupId);
+                    } else {
+                        console.error('No cleanupId found for button');
+                    }
+                });
+            });
+            
+            // Кнопка удаления всей очистки
+            document.getElementById('delete-all-btn').addEventListener('click', () => {
+                this.deleteCurrentCleanup();
+            });
+            
+            // Модальное окно ответа
+            document.querySelector('.close-modal').addEventListener('click', () => this.closeModal());
+            document.getElementById('cancelReplyBtn').addEventListener('click', () => this.closeModal());
+            document.getElementById('copyOriginalBtn').addEventListener('click', () => this.copyOriginal());
+            document.getElementById('sendReplyBtn').addEventListener('click', () => this.sendReply());
+            
+            // Закрытие модального окна при клике вне его
+            document.getElementById('replyModal').addEventListener('click', (e) => {
+                if (e.target === document.getElementById('replyModal')) {
+                    this.closeModal();
+                }
+            });
+            
+            // Закрытие по ESC
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    this.closeModal();
+                }
+            });
+            
+            // Обработка изменения ориентации экрана
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    if (this.currentCleanupId !== null) {
+                        this.showCleanup(this.currentCleanupId);
+                    }
+                }, 300);
+            });
+        }
+        
+        initCleanupListScroll() {
+            // На мобильных устройствах прокручиваем к активному элементу
+            if (window.innerWidth < 768) {
+                const activeItem = document.querySelector('.cleanup-item.active');
+                if (activeItem) {
+                    activeItem.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'nearest',
+                        inline: 'center'
+                    });
+                }
+            }
+        }
+        
+        selectFirstCleanup() {
+            if (this.cleanups && this.cleanups.length > 0) {
+                this.showCleanup(this.cleanups[0].id);
+            }
+        }
+        
+        showCleanup(cleanupId) {
+            const cleanup = this.cleanups.find(c => c.id === cleanupId);
+            if (!cleanup) return;
+            
+            // Обновляем активный элемент
+            document.querySelectorAll('.cleanup-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            const cleanupElement = document.querySelector(`[data-cleanup-id="${cleanupId}"]`);
+            if (cleanupElement) {
+                cleanupElement.classList.add('active');
+            }
+            
+            // Обновляем заголовок
+            document.getElementById('selected-title').textContent = `Очистка от ${cleanup.date_display}`;
+            document.getElementById('selected-timestamp').textContent = `Удалено ${cleanup.total} записей • ${cleanup.timestamp}`;
+            document.getElementById('delete-all-btn').style.display = 'block';
+            
+            // Показываем содержимое
+            document.getElementById('no-selection').style.display = 'none';
+            document.getElementById('logs-content').style.display = 'block';
+            document.getElementById('empty-cleanup').style.display = 'none';
+            
+            // Заполняем логи
+            const logsGrid = document.getElementById('logs-grid');
+            logsGrid.innerHTML = '';
+            
+            if (cleanup.logs && cleanup.logs.length > 0) {
+                cleanup.logs.forEach(log => {
+                    const logCard = this.createLogCard(cleanupId, log);
+                    logsGrid.appendChild(logCard);
+                });
+            } else {
+                document.getElementById('logs-content').style.display = 'none';
+                document.getElementById('empty-cleanup').style.display = 'block';
+            }
+            
+            this.currentCleanupId = cleanupId;
+            
+            // На мобильных устройствах прокручиваем к верху контента
+            if (window.innerWidth < 768) {
+                document.querySelector('.main-content').scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }
+        }
+        
+        createLogCard(cleanupId, log) {
+            // Убедимся, что у лога есть ID
+            const logId = log.id || Math.random().toString(36).substr(2, 9);
+            
+            const logCard = document.createElement('div');
+            logCard.className = 'log-card';
+            logCard.innerHTML = `
+                <button class="reply-log-btn" title="Ответить на это сообщение">
+                    ↩️
+                </button>
+                <button class="delete-log-btn">×</button>
+                <div class="log-header">
+                    <strong>💬 Сообщение</strong>
+                    <div class="log-meta">
+                        Чат: ${log.chat_id} • ID: ${log.message_id}
+                    </div>
+                </div>
+                <div class="log-content">
+                    ${this.escapeHtml(log.text) || 'Нет текста'}
+                </div>
+                ${log.original_timestamp ? `
+                <div class="log-meta" style="margin-top: 10px;">
+                    📅 Оригинальное время: ${log.original_timestamp}
+                </div>
+                ` : ''}
+            `;
+            
+            // Добавляем обработчики для кнопок
+            const replyBtn = logCard.querySelector('.reply-log-btn');
+            const deleteBtn = logCard.querySelector('.delete-log-btn');
+            
+            replyBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.showReplyModal(cleanupId, logId);
+            });
+            
+            deleteBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.deleteLog(cleanupId, logId);
+            });
+            
+            return logCard;
+        }
+        
+        escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        showReplyModal(cleanupId, logId) {
+            const cleanup = this.cleanups.find(c => c.id === cleanupId);
+            if (!cleanup) return;
+            
+            const log = cleanup.logs.find(l => (l.id === logId) || (l.message_id === logId));
+            if (!log) {
+                console.error('Log not found:', cleanupId, logId);
+                alert('Сообщение не найдено');
+                return;
+            }
+            
+            this.currentReplyCleanupId = cleanupId;
+            this.currentReplyLogId = logId;
+            
+            // Заполняем превью оригинального сообщения
+            const preview = document.getElementById('originalMessagePreview');
+            preview.innerHTML = `
+                <div class="message-info">
+                    <span>Чат ID: ${log.chat_id}</span>
+                    <span>Сообщение ID: ${log.message_id}</span>
+                </div>
+                <div class="message-text">
+                    ${this.escapeHtml(log.text) || 'Нет текста'}
+                </div>
+            `;
+            
+            // Очищаем поле ответа
+            document.getElementById('replyText').value = '';
+            
+            // Показываем модальное окно
+            document.getElementById('replyModal').style.display = 'block';
+            document.getElementById('replyText').focus();
+        }
+        
+        closeModal() {
+            document.getElementById('replyModal').style.display = 'none';
+            this.currentReplyCleanupId = null;
+            this.currentReplyLogId = null;
+        }
+        
+        copyOriginal() {
+            const log = this.getCurrentLog();
+            if (!log) return;
+            
+            const textToCopy = log.text || '';
+            if (textToCopy) {
+                navigator.clipboard.writeText(textToCopy)
+                    .then(() => {
+                        const btn = document.getElementById('copyOriginalBtn');
+                        const originalText = btn.textContent;
+                        btn.textContent = '✓ Скопировано!';
+                        btn.style.backgroundColor = '#27ae60';
+                        setTimeout(() => {
+                            btn.textContent = originalText;
+                            btn.style.backgroundColor = '';
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('Ошибка копирования:', err);
+                        alert('Не удалось скопировать текст');
+                    });
+            }
+        }
+        
+        getCurrentLog() {
+            if (!this.currentReplyCleanupId || !this.currentReplyLogId) return null;
+            
+            const cleanup = this.cleanups.find(c => c.id === this.currentReplyCleanupId);
+            if (!cleanup) return null;
+            
+            return cleanup.logs.find(l => (l.id === this.currentReplyLogId) || (l.message_id === this.currentReplyLogId));
+        }
+        
+        sendReply() {
+            const replyText = document.getElementById('replyText').value.trim();
+            const log = this.getCurrentLog();
+            
+            if (!log) {
+                alert('Ошибка: сообщение не найдено');
+                return;
+            }
+            
+            if (!replyText) {
+                alert('Введите текст ответа');
+                document.getElementById('replyText').focus();
+                return;
+            }
+            
+            // Отправляем запрос на сервер
+            fetch('/tgbot/deleted_logs/reply', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    cleanup_id: this.currentReplyCleanupId,
+                    log_id: this.currentReplyLogId,
+                    reply_text: replyText,
+                    chat_id: log.chat_id,
+                    message_id: log.message_id
+                })
+            })
+            .then(response => {
+                // Проверяем, является ли ответ JSON
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    return response.json();
+                } else {
+                    return response.text().then(text => {
+                        throw new Error(`Expected JSON but got: ${text.substring(0, 100)}`);
+                    });
+                }
+            })
+            .then(data => {
+                if (data.status === 'success') {
+                    // Показываем уведомление об успехе
+                    const sendBtn = document.getElementById('sendReplyBtn');
+                    const originalText = sendBtn.textContent;
+                    sendBtn.textContent = '✓ Отправлено!';
+                    sendBtn.style.backgroundColor = '#27ae60';
+                    
+                    setTimeout(() => {
+                        sendBtn.textContent = originalText;
+                        sendBtn.style.backgroundColor = '';
+                        this.closeModal();
+                    }, 1500);
+                } else {
+                    alert('Ошибка отправки: ' + (data.error || 'неизвестная ошибка'));
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Ошибка при отправке ответа: ' + error.message);
+            });
+        }
+        
+        deleteLog(cleanupId, logId) {
+            if (!cleanupId || !logId) {
+                alert('Ошибка: не указаны идентификаторы');
+                return;
+            }
+            
+            if (confirm('Вы уверены, что хотите удалить эту запись?')) {
+                fetch(`/tgbot/deleted_logs/${cleanupId}/${logId}`, {
+                    method: 'DELETE',
+                })
+                .then(response => {
+                    // Проверяем, является ли ответ JSON
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        return response.json();
+                    } else {
+                        return response.text().then(text => {
+                            throw new Error(`Expected JSON but got: ${text.substring(0, 100)}`);
+                        });
+                    }
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert('Ошибка при удалении: ' + (data.error || 'неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ошибка при удалении: ' + error.message);
+                });
+            }
+        }
+        
+        deleteCleanup(cleanupId) {
+            if (!cleanupId) {
+                alert('Ошибка: не указан идентификатор очистки');
+                return;
+            }
+            
+            if (confirm('Вы уверены, что хотите удалить всю запись об этой очистке?')) {
+                fetch(`/tgbot/deleted_logs/${cleanupId}`, {
+                    method: 'DELETE',
+                })
+                .then(response => {
+                    // Проверяем, является ли ответ JSON
+                    const contentType = response.headers.get("content-type");
+                    if (contentType && contentType.includes("application/json")) {
+                        return response.json();
+                    } else {
+                        return response.text().then(text => {
+                            throw new Error(`Expected JSON but got: ${text.substring(0, 100)}`);
+                        });
+                    }
+                })
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    } else {
+                        alert('Ошибка при удалении: ' + (data.error || 'неизвестная ошибка'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ошибка при удалении: ' + error.message);
+                });
+            }
+        }
+        
+        deleteCurrentCleanup() {
+            if (this.currentCleanupId) {
+                this.deleteCleanup(this.currentCleanupId);
+            } else {
+                alert('Не выбрана очистка для удаления');
+            }
+        }
+    }
+    
+    // Инициализация при загрузке страницы
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            new LogHistoryManager();
+        } catch (error) {
+            console.error('Ошибка инициализации:', error);
+            alert('Ошибка загрузки страницы. Проверьте консоль для деталей.');
+        }
+    });
+</script>
 </body>
-
-<style>
-    body{
-        background: rgb(36, 33, 33);
-        border-radius: 5px;
-        margin: 5%;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-        padding: 10px;
-        color: white;
-    }
-
-    ul{
-        margin: 5%;
-        background: rgb(68, 172, 190);
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-        border-radius: 5px;
-        padding: 10px;
-        list-style-type: none;
-        color: white;
-        font-size: 20px;
-        font-family: Arial, sans-serif;
-        text-align: center;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-        text-decoration: none;
-    }
-
-    li{
-        margin: 5%;
-        background: rgb(68, 172, 190);
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-        border-radius: 5px;
-        padding: 10px;
-        list-style-type: none;
-        color: white;
-        font-size: 20px;
-        font-family: Arial, sans-serif;
-        text-align: center;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
-        text-decoration: none;
-        transition: background-color 0.3s ease;
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-block;
-        width: 80%;
-        border-radius: 10px;
-        border: 2px solid #44ACBE;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-    }
-</style>
 </html>

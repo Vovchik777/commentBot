@@ -6,7 +6,7 @@ import pytz  # нужно установить: pip install pytz
 moscow_tz = pytz.timezone("Europe/Moscow")
 
 from faker import Faker
-from flask import Flask, request, jsonify,send_from_directory,render_template
+from flask import Flask, request, jsonify, send_from_directory, render_template
 import requests
 import os
 import logging
@@ -37,11 +37,11 @@ logger = logging.getLogger(__name__)
 
 
 class Permissions(IntEnum):
-    BASE   =  0
-    MODER  =  1
-    ADMIN  =  2
-    DEV    =  3
-    LOGGER =  4
+    BASE = 0
+    MODER = 1
+    ADMIN = 2
+    DEV = 3
+    LOGGER = 4
 
 
 def required_permission(permission_level):
@@ -130,7 +130,7 @@ class TelegramBot:
             "moder": Permissions.MODER,
             "admin": Permissions.ADMIN,
             "developer": Permissions.DEV,
-            "logger" : Permissions.LOGGER
+            "logger": Permissions.LOGGER,
         }
         return permission_map.get(permission.lower())
 
@@ -140,7 +140,7 @@ class TelegramBot:
             Permissions.MODER: "модер",
             Permissions.ADMIN: "админ",
             Permissions.DEV: "разработчик",
-            Permissions.LOGGER : "клутой"
+            Permissions.LOGGER: "клутой",
         }
         return permission_map.get(permission)
 
@@ -331,21 +331,28 @@ class TelegramBot:
     def load_comments(self):
         with open("comments.json", "r", encoding="utf-8") as f:
             comment_data = json.load(f)
-            self.text_comments:list = comment_data["text"]
-            self.photo_comments:list = comment_data["photo"]
-            self.scheduled_comments:dict = comment_data["scheduled"]
+            self.text_comments: list = comment_data["text"]
+            self.photo_comments: list = comment_data["photo"]
+            self.scheduled_comments: dict = comment_data["scheduled"]
 
     def save_comments(self):
         with open("comments.json", "w") as f:
-            json.dump({"text": self.text_comments, "photo": self.photo_comments,"scheduled":self.scheduled_comments}, f)
+            json.dump(
+                {
+                    "text": self.text_comments,
+                    "photo": self.photo_comments,
+                    "scheduled": self.scheduled_comments,
+                },
+                f,
+            )
 
     def send_message(self, chat_id, text, reply_to_message_id=None):
         """Отправка сообщения"""
         logger.info(f"Попытка отправить сообщение длиной {len(text)} символов")
-        
+
         # Максимальная длина сообщения в Telegram
         MAX_LENGTH = 4096
-        
+
         if len(text) <= MAX_LENGTH:
             # Обычная отправка для коротких сообщений
             url = f"{self.base_url}/sendMessage"
@@ -362,34 +369,36 @@ class TelegramBot:
                 return None
         else:
             # Разбиваем длинное сообщение на части
-            logger.info(f"Сообщение слишком длинное ({len(text)} символов), разбиваем на части")
+            logger.info(
+                f"Сообщение слишком длинное ({len(text)} символов), разбиваем на части"
+            )
             parts = []
             current_part = ""
-            
+
             # Разбиваем по строкам, чтобы не обрывать слова
-            lines = text.split('\n')
+            lines = text.split("\n")
             for line in lines:
                 if len(current_part) + len(line) + 1 <= MAX_LENGTH:
-                    current_part += line + '\n'
+                    current_part += line + "\n"
                 else:
                     if current_part:
                         parts.append(current_part.strip())
-                    current_part = line + '\n'
-            
+                    current_part = line + "\n"
+
             if current_part:
                 parts.append(current_part.strip())
-            
+
             # Отправляем части
             results = []
             for i, part in enumerate(parts):
                 logger.info(f"Отправка части {i+1}/{len(parts)} ({len(part)} символов)")
                 url = f"{self.base_url}/sendMessage"
                 payload = {"chat_id": chat_id, "text": part}
-                
+
                 # Только первая часть будет reply_to_message_id
                 if i == 0 and reply_to_message_id:
                     payload["reply_to_message_id"] = reply_to_message_id
-                
+
                 try:
                     response = requests.post(url, json=payload)
                     results.append(response.json())
@@ -399,7 +408,7 @@ class TelegramBot:
                 except Exception as e:
                     logger.error(f"Ошибка отправки части {i+1}: {e}")
                     results.append(None)
-            
+
             return results
 
     def set_message_reaction(self, chat_id, message_id):
@@ -457,7 +466,11 @@ class TelegramBot:
             elif chat_type == "private":
                 if not str(chat_id) == str(self.logger_chat_id):
                     chat_info = self.get_chat_info(chat_id)
-                    username = chat_info.get('username', 'неизвестно') if isinstance(chat_info, dict) else 'неизвестно'
+                    username = (
+                        chat_info.get("username", "неизвестно")
+                        if isinstance(chat_info, dict)
+                        else "неизвестно"
+                    )
                     msg = self.send_message(
                         self.logger_chat_id,
                         f"[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{username} ({chat_id}), {text}]",
@@ -474,7 +487,7 @@ class TelegramBot:
                                             "chat_id": chat_id,
                                             "message_id": message_id,
                                             "timestamp": time.time(),
-                                            "text": text
+                                            "text": text,
                                         }
                         # Обрабатываем как одиночный результат
                         elif isinstance(msg, dict) and msg.get("ok"):
@@ -484,9 +497,9 @@ class TelegramBot:
                                     "chat_id": chat_id,
                                     "message_id": message_id,
                                     "timestamp": time.time(),
-                                    "text": text
+                                    "text": text,
                                 }
-                        
+
                         self.save_logged_msgs()
 
                 return self.handle_private_message(
@@ -569,16 +582,16 @@ class TelegramBot:
                 )
             )
             num += 1
-        
+
         if self.get_user_permission(chat_id) == Permissions.LOGGER:
             num = 1
-            for key,value in self.scheduled_comments.items():
-                msg.append(f"{key}".center(15,"-"))
+            for key, value in self.scheduled_comments.items():
+                msg.append(f"{key}".center(15, "-"))
                 for comm in self.scheduled_comments[key]:
                     msg.append(f"   {num}. {comm}")
-                    num+=1
+                    num += 1
         text = "\n".join(msg)
-        self.send_message(chat_id,text)
+        self.send_message(chat_id, text)
 
     @required_permission(Permissions.MODER)
     def handle_delete_comment(self, chat_id, text):
@@ -620,21 +633,24 @@ class TelegramBot:
                     return
             elif comment_type == "schedule":
                 num = 1
-                for key,value in self.scheduled_comments.items():
-                    if isinstance(value,list):
+                for key, value in self.scheduled_comments.items():
+                    if isinstance(value, list):
                         for comm in value:
                             if num == del_num:
-                                del_txt = value[num-1]
-                                value.pop(num-1)
+                                del_txt = value[num - 1]
+                                value.pop(num - 1)
                                 self.scheduled_comments[key] = value
                                 if not self.scheduled_comments[key]:
                                     del self.scheduled_comments[key]
                                 self.save_comments()
-                                self.send_message(chat_id,f"Комментарий №{del_num} ({del_txt}) ({key}) удален")
+                                self.send_message(
+                                    chat_id,
+                                    f"Комментарий №{del_num} ({del_txt}) ({key}) удален",
+                                )
                                 return
-                            
-                self.send_message(chat_id,"такой комментарий не найден")
-                    
+
+                self.send_message(chat_id, "такой комментарий не найден")
+
         else:
             self.send_message(chat_id, "Введите число")
 
@@ -664,27 +680,38 @@ class TelegramBot:
         # Получаем ID сообщения, на которое ответили
         reply_to_message = message_data.get("reply_to_message")
         if not reply_to_message:
-            self.send_message(chat_id, "Это сообщение не является ответом на другое сообщение")
+            self.send_message(
+                chat_id, "Это сообщение не является ответом на другое сообщение"
+            )
             return
 
         # Получаем message_id сообщения, на которое ответили
         replied_message_id = reply_to_message.get("message_id")
         if not replied_message_id:
-            self.send_message(chat_id, "Не удалось определить сообщение, на которое вы ответили")
+            self.send_message(
+                chat_id, "Не удалось определить сообщение, на которое вы ответили"
+            )
             return
 
         # Преобразуем в строку для поиска в JSON
         replied_message_id_str = str(replied_message_id)
-        
+
         # НЕ перезагружаем logged_msgs, используем текущие данные в памяти
         logger.info(f"Поиск сообщения {replied_message_id_str} в logged_msgs")
-        logger.info(f"Доступные ключи в logged_msgs: {list(self.logged_msgs.keys())[:10]}...")  # Первые 10 ключей
-        
+        logger.info(
+            f"Доступные ключи в logged_msgs: {list(self.logged_msgs.keys())[:10]}..."
+        )  # Первые 10 ключей
+
         # Проверяем, есть ли такой message_id в logged_msgs
         if replied_message_id_str not in self.logged_msgs:
-            self.send_message(chat_id, f"Сообщение {replied_message_id_str} не найдено в логах. Всего записей: {len(self.logged_msgs)}")
+            self.send_message(
+                chat_id,
+                f"Сообщение {replied_message_id_str} не найдено в логах. Всего записей: {len(self.logged_msgs)}",
+            )
             # Логируем для отладки
-            logger.error(f"Сообщение {replied_message_id_str} не найдено. Доступные ключи: {list(self.logged_msgs.keys())[-10:]}")
+            logger.error(
+                f"Сообщение {replied_message_id_str} не найдено. Доступные ключи: {list(self.logged_msgs.keys())[-10:]}"
+            )
             return
 
         # Получаем данные для ответа
@@ -697,8 +724,7 @@ class TelegramBot:
             # Отправляем ответ
             self.send_message(answer_chat_id, answer, reply_to_message_id=answer_msg_id)
             self.send_message(chat_id, "Ответ отправлен")
-            
-            
+
         except IndexError:
             self.send_message(chat_id, "Используйте: /answer [текст ответа]")
         except Exception as e:
@@ -743,7 +769,6 @@ class TelegramBot:
     def handle_help(self, chat_id):
         self.send_message(chat_id, self.help_msg)
 
-
     @required_permission(Permissions.LOGGER)
     def handle_set_schedule_comment(self, chat_id, text):
         if len(text.split()) < 3:
@@ -761,30 +786,33 @@ class TelegramBot:
             }
             payload = {
                 "chat_id": chat_id,
-                "text" : "нажми на кнопку чтобы запланировать комментарий",
-                "reply_markup" : keyboard
+                "text": "нажми на кнопку чтобы запланировать комментарий",
+                "reply_markup": keyboard,
             }
             try:
-                requests.post(url,json=payload)
+                requests.post(url, json=payload)
                 logger.info("соо с кнопкой отправлено")
 
             except Exception as e:
                 logger.error(f"ошибка при отправке соо с кнопкой {e}")
-                requests.post(url,json = {"chat_id":chat_id,"text":"ошибка при отправке сообщения"})
+                requests.post(
+                    url,
+                    json={"chat_id": chat_id, "text": "ошибка при отправке сообщения"},
+                )
         else:
             date = text.split()[1]
             msg = " ".join(text.split()[2:])
 
             if date not in self.scheduled_comments:
                 self.scheduled_comments[date] = []
-            
+
             self.scheduled_comments[date].append(msg)
 
             self.save_comments()
 
-            self.send_message(chat_id,f"комментарий ```{msg}``` добавлен на дату {date}")
-
-
+            self.send_message(
+                chat_id, f"комментарий ```{msg}``` добавлен на дату {date}"
+            )
 
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
@@ -817,12 +845,12 @@ class TelegramBot:
             sender_chat = message_data.get("sender_chat")
             if sender_chat and isinstance(sender_chat, dict):
                 return sender_chat.get("title")
-            
+
             # Если нет sender_chat, пробуем получить из chat
             chat = message_data.get("chat")
             if chat and isinstance(chat, dict):
                 return chat.get("title")
-            
+
             return None
 
         except Exception as e:
@@ -836,27 +864,37 @@ class TelegramBot:
         text = message_data.get("text", "")
         caption = message_data.get("caption", "")
 
-        logger.info(f"Группа '{message_data['chat'].get('title', 'Unknown')}': сообщение {message_id}")
+        logger.info(
+            f"Группа '{message_data['chat'].get('title', 'Unknown')}': сообщение {message_id}"
+        )
 
         # Проверка на пересланные сообщения
         is_forwarded = any(key.startswith("forward") for key in message_data.keys())
-        
+
         if is_forwarded:
             logger.info("Обнаружено пересланное сообщение!")
             return self.handle_forwarded_message(message_data)
         else:
             # ИСПРАВЛЕНИЕ: Безопасное получение username
-            from_user = message_data.get('from', {})
-            username = from_user.get('username', 'неизвестно') if isinstance(from_user, dict) else 'неизвестно'
-            
+            from_user = message_data.get("from", {})
+            username = (
+                from_user.get("username", "неизвестно")
+                if isinstance(from_user, dict)
+                else "неизвестно"
+            )
+
             channel_info = self.get_forwarded_channel_info(message_data)
-            channel_text = f"СООБЩЕНИЕ ИЗ ГРУППЫ {channel_info}" if channel_info else "СООБЩЕНИЕ ИЗ ГРУППЫ"
-            
+            channel_text = (
+                f"СООБЩЕНИЕ ИЗ ГРУППЫ {channel_info}"
+                if channel_info
+                else "СООБЩЕНИЕ ИЗ ГРУППЫ"
+            )
+
             log_message = f"{channel_text}\n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{username} ({chat_id}), {text}]"
-            
+
             # Отправляем сообщение в лог
             msg_result = self.send_message(self.logger_chat_id, log_message)
-            
+
             # Исправленная обработка результата
             if msg_result:
                 # Если сообщение было разбито на части, msg_result будет списком
@@ -869,7 +907,7 @@ class TelegramBot:
                                     "chat_id": chat_id,
                                     "message_id": message_id,
                                     "timestamp": time.time(),
-                                    "text": caption or text or 'нет текста'
+                                    "text": caption or text or "нет текста",
                                 }
                 # Если одно сообщение
                 elif isinstance(msg_result, dict) and msg_result.get("ok"):
@@ -879,16 +917,19 @@ class TelegramBot:
                             "chat_id": chat_id,
                             "message_id": message_id,
                             "timestamp": time.time(),
-                            "text": caption or text or 'нет текста'
+                            "text": caption or text or "нет текста",
                         }
-                
+
                 self.save_logged_msgs()
-                logger.info(f"Сообщение сохранено в лог. Всего записей: {len(self.logged_msgs)}")
+                logger.info(
+                    f"Сообщение сохранено в лог. Всего записей: {len(self.logged_msgs)}"
+                )
             else:
                 logger.error("Ошибка при отправке логов")
-            
+
             if text:
                 return self.check_banwords(chat_id, text, message_id)
+
     def parse_comment(self, comment, refind):
         for i in refind:
             comment = comment.replace(
@@ -904,22 +945,30 @@ class TelegramBot:
         message_id = message_data["message_id"]
         media_group_id = message_data.get("media_group_id")
         caption = message_data.get("caption", "")
-        
+
         # ИСПРАВЛЕНИЕ: Безопасное получение username
         chat_info = self.get_chat_info(chat_id)
         if isinstance(chat_info, dict):
-            username = chat_info.get('username', 'неизвестно')
+            username = chat_info.get("username", "неизвестно")
         else:
-            from_user = message_data.get('from', {})
-            username = from_user.get('username', 'неизвестно') if isinstance(from_user, dict) else 'неизвестно'
-        
+            from_user = message_data.get("from", {})
+            username = (
+                from_user.get("username", "неизвестно")
+                if isinstance(from_user, dict)
+                else "неизвестно"
+            )
+
         channel_info = self.get_forwarded_channel_info(message_data)
-        channel_text = f"СООБЩЕНИЕ ИЗ КАНАЛА {channel_info}" if channel_info else "СООБЩЕНИЕ ИЗ КАНАЛА"
-        
+        channel_text = (
+            f"СООБЩЕНИЕ ИЗ КАНАЛА {channel_info}"
+            if channel_info
+            else "СООБЩЕНИЕ ИЗ КАНАЛА"
+        )
+
         log_message = f"{channel_text} \n[{datetime.datetime.now(moscow_tz).strftime('%H:%M:%S')} : @{username} ({chat_id}), {caption or message_data.get('text', 'нет текста')}]"
-        
+
         msg_result = self.send_message(self.logger_chat_id, log_message)
-        
+
         # Обрабатываем все результаты отправки
         if msg_result:
             if isinstance(msg_result, list):
@@ -931,7 +980,8 @@ class TelegramBot:
                                 "chat_id": chat_id,
                                 "message_id": message_id,
                                 "timestamp": time.time(),
-                                "text": caption or message_data.get('text', 'нет текста')
+                                "text": caption
+                                or message_data.get("text", "нет текста"),
                             }
             elif isinstance(msg_result, dict) and msg_result.get("ok"):
                 bot_msg_id = msg_result.get("result", {}).get("message_id")
@@ -940,11 +990,13 @@ class TelegramBot:
                         "chat_id": chat_id,
                         "message_id": message_id,
                         "timestamp": time.time(),
-                        "text": caption or message_data.get('text', 'нет текста')
+                        "text": caption or message_data.get("text", "нет текста"),
                     }
-            
+
             self.save_logged_msgs()
-            logger.info(f"Пересланное сообщение сохранено в лог. Всего записей: {len(self.logged_msgs)}")
+            logger.info(
+                f"Пересланное сообщение сохранено в лог. Всего записей: {len(self.logged_msgs)}"
+            )
 
         if not hasattr(self, "prevcomment"):
             self.prevcomment = ""
@@ -1030,7 +1082,7 @@ class TelegramBot:
         logger.info(f"Отправка комментария: {comment}")
         self.send_message(chat_id, comment, reply_to_message_id=message_id)
 
-        self.check_scheduled(chat_id,message_id)
+        self.check_scheduled(chat_id, message_id)
 
     def get_chat_info(self, chat_id):
         """Получение информации о чате/пользователе по chat_id"""
@@ -1060,14 +1112,15 @@ class TelegramBot:
                 return True
         return False
 
-    def check_scheduled(self,chat_id,message_id):
-        today = datetime.datetime.now(moscow_tz).strftime('%Y-%m-%d')
+    def check_scheduled(self, chat_id, message_id):
+        today = datetime.datetime.now(moscow_tz).strftime("%Y-%m-%d")
         logger.info(f"сегодня {today}")
-        for key,value in self.scheduled_comments.items():
+        for key, value in self.scheduled_comments.items():
             logger.info(f"{today}, {key}")
             if today == key:
                 for comm in self.scheduled_comments[key]:
-                    self.send_message(chat_id,comm,reply_to_message_id=message_id)
+                    self.send_message(chat_id, comm, reply_to_message_id=message_id)
+
 
 # Инициализация бота
 bot = TelegramBot(BOT_TOKEN, LOGGER_CHAT_ID, "users.db")
@@ -1168,31 +1221,226 @@ def test():
 
 @app.route("/tgbot/date_picker")
 def date_picker():
-    return send_from_directory(".","date_pick.html")
+    return send_from_directory(".", "date_pick.html")
+
+
+DELETED_LOGS_FILE = "deleted_logs_history.json"
+
+import uuid
 
 @app.route("/tgbot/deleted_logs", methods=["POST"])
 def deleted_logs():
+    """Принимает и сохраняет данные об удаленных логах в историю"""
     if not request.get_json():
         return jsonify({"error": "No JSON data received"}), 400
-    else:
-        try:
-            data = request.get_json()
-            with open("deleted_logs.json", "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-            logger.info(f"Получены данные об удалении {data.get('total', 0)} логов")
-            return jsonify({"status": "success", "received": data.get('total', 0)})
-        except Exception as e:
-            logger.error(f"Ошибка обработки deleted_logs: {e}")
-            return jsonify({"error": "Internal server error"}), 500
+    
+    try:
+        new_record = request.get_json()
+        
+        # Генерируем ID, если его нет
+        if not new_record.get('id'):
+            new_record['id'] = str(uuid.uuid4())[:8]
+        
+        # Генерируем ID для каждого лога, если нет
+        if 'logs' in new_record:
+            for log in new_record['logs']:
+                if not log.get('id'):
+                    log['id'] = str(uuid.uuid4())[:8]
+        
+        # Загружаем существующую историю или создаем новую
+        if os.path.exists(DELETED_LOGS_FILE):
+            with open(DELETED_LOGS_FILE, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        else:
+            history = {
+                "total_cleanups": 0,
+                "total_deleted": 0,
+                "cleanups": []
+            }
+        
+        # Добавляем новую запись в начало списка
+        history["cleanups"].insert(0, new_record)
+        history["total_cleanups"] += 1
+        history["total_deleted"] += new_record.get("total", 0)
+        
+        # Ограничиваем историю последними 50 очистками
+        if len(history["cleanups"]) > 50:
+            # Вычисляем сколько нужно удалить из total_deleted
+            removed_count = sum(cleanup.get("total", 0) for cleanup in history["cleanups"][50:])
+            history["total_deleted"] -= removed_count
+            history["cleanups"] = history["cleanups"][:50]
+        
+        # Сохраняем обновленную историю
+        with open(DELETED_LOGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Добавлена запись об очистке: {new_record.get('total', 0)} логов")
+        return jsonify({"status": "success", "received": new_record.get('total', 0)})
+        
+    except Exception as e:
+        logger.error(f"Ошибка обработки deleted_logs: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
 
 @app.route("/tgbot/deleted_logs", methods=["GET"])
 def show_deleted_logs():
+    """Показывает историю удаленных логов с боковой панелью"""
     try:
-        with open("deleted_logs.json", "r", encoding="utf-8") as f:
-            del_logs = json.load(f)
-        return render_template("del_logs.html", del_logs=del_logs)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        return render_template("del_logs.html", del_logs={"error": "No logs found"})
+        if os.path.exists(DELETED_LOGS_FILE):
+            with open(DELETED_LOGS_FILE, "r", encoding="utf-8") as f:
+                history_data = json.load(f)
+        else:
+            history_data = {"total_cleanups": 0, "total_deleted": 0, "cleanups": []}
+
+        return render_template("del_logs.html", history=history_data)
+    except Exception as e:
+        logger.error(f"Ошибка загрузки истории удалений: {e}")
+        return render_template(
+            "del_logs.html",
+            history={
+                "total_cleanups": 0,
+                "total_deleted": 0,
+                "cleanups": [],
+                "error": "Ошибка загрузки истории",
+            },
+        )
+
+
+@app.route("/tgbot/deleted_logs/reply", methods=["POST"])
+def reply_to_deleted_log():
+    """Отправляет ответ на удаленное сообщение"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"status": "error", "error": "No JSON data received"}), 400
+
+        # Получаем данные из запроса
+        reply_text = data.get("reply_text")
+        chat_id = data.get("chat_id")
+        message_id = data.get("message_id")
+
+        if not all([reply_text, chat_id, message_id]):
+            return jsonify({"status": "error", "error": "Missing required fields"}), 400
+
+        # Используем бота для отправки ответа
+        try:
+            result = bot.send_message(
+                chat_id=int(chat_id),
+                text=reply_text,
+                reply_to_message_id=int(message_id),
+            )
+
+            if result:
+                logger.info(
+                    f"Ответ отправлен в чат {chat_id} на сообщение {message_id}"
+                )
+                return jsonify({"status": "success", "message": "Ответ отправлен"})
+            else:
+                return (
+                    jsonify({"status": "error", "error": "Failed to send message"}),
+                    500,
+                )
+
+        except Exception as bot_error:
+            logger.error(f"Ошибка при отправке ответа ботом: {bot_error}")
+            return (
+                jsonify({"status": "error", "error": f"Bot error: {str(bot_error)}"}),
+                500,
+            )
+
+    except Exception as e:
+        logger.error(f"Ошибка обработки ответа: {e}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/tgbot/deleted_logs/<cleanup_id>", methods=["DELETE"])
+def delete_entire_cleanup(cleanup_id):
+    """Удаляет всю запись об очистке"""
+    try:
+        if not cleanup_id:
+            return jsonify({"status": "error", "error": "Cleanup ID is required"}), 400
+        
+        if not os.path.exists(DELETED_LOGS_FILE):
+            return jsonify({"status": "error", "error": "История очистки не найдена"}), 404
+        
+        with open(DELETED_LOGS_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        
+        # Находим очистку для удаления
+        cleanup_to_delete = None
+        for cleanup in history["cleanups"]:
+            if cleanup["id"] == cleanup_id:
+                cleanup_to_delete = cleanup
+                break
+        
+        if not cleanup_to_delete:
+            return jsonify({"status": "error", "error": "Cleanup not found"}), 404
+        
+        # Удаляем очистку и обновляем счетчики
+        history["cleanups"] = [c for c in history["cleanups"] if c["id"] != cleanup_id]
+        history["total_cleanups"] -= 1
+        history["total_deleted"] -= cleanup_to_delete.get("total", 0)
+        
+        # Сохраняем изменения
+        with open(DELETED_LOGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+        
+        logger.info(f"Удалена вся очистка {cleanup_id}")
+        return jsonify({"status": "success", "message": "Очистка удалена"})
+        
+    except Exception as e:
+        logger.error(f"Ошибка удаления очистки: {e}")
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/tgbot/deleted_logs/<cleanup_id>/<log_id>", methods=["DELETE"])
+def delete_specific_cleanup_log(cleanup_id, log_id):
+    """Удаляет конкретную запись из истории очистки"""
+    try:
+        if not cleanup_id or not log_id:
+            return jsonify({"status": "error", "error": "Cleanup ID and Log ID are required"}), 400
+        
+        if not os.path.exists(DELETED_LOGS_FILE):
+            return jsonify({"status": "error", "error": "История очистки не найдена"}), 404
+        
+        with open(DELETED_LOGS_FILE, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        
+        # Находим и удаляем запись
+        cleanup_found = False
+        for cleanup in history["cleanups"]:
+            if cleanup["id"] == cleanup_id:
+                cleanup_found = True
+                if "logs" in cleanup:
+                    # Удаляем конкретный лог
+                    original_length = len(cleanup["logs"])
+                    cleanup["logs"] = [log for log in cleanup["logs"] if log.get("id") != log_id and log.get("message_id") != log_id]
+                    
+                    if len(cleanup["logs"]) < original_length:
+                        # Обновляем счетчики
+                        cleanup["total"] = len(cleanup["logs"])
+                        history["total_deleted"] -= (original_length - len(cleanup["logs"]))
+                        
+                        # Если логов не осталось, удаляем всю очистку
+                        if cleanup["total"] == 0:
+                            history["cleanups"] = [c for c in history["cleanups"] if c["id"] != cleanup_id]
+                            history["total_cleanups"] -= 1
+                        
+                        # Сохраняем изменения
+                        with open(DELETED_LOGS_FILE, "w", encoding="utf-8") as f:
+                            json.dump(history, f, ensure_ascii=False, indent=2)
+                        
+                        logger.info(f"Удален лог {log_id} из очистки {cleanup_id}")
+                        return jsonify({"status": "success", "message": "Запись удалена"})
+                    else:
+                        return jsonify({"status": "error", "error": "Log not found in cleanup"}), 404
+        
+        if not cleanup_found:
+            return jsonify({"status": "error", "error": "Cleanup not found"}), 404
+            
+    except Exception as e:
+        logger.error(f"Ошибка удаления записи: {e}")
+        return jsonify({"status": "error", "error": str(e)}), 500
 
 @app.route("/")
 def index():
