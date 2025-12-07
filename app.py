@@ -46,14 +46,19 @@ class Permissions(IntEnum):
 
 def required_permission(permission_level):
     def decorator(func):
-        def wrapper(self, chat_id, *args, **kwargs):
+        def wrapper(self, group_id, user_id, message_data, *args, **kwargs):
+            msg_id = message_data["message_id"]
             try:
+                if isinstance(group_id, int):
+                    table_name = "group_" + str(abs(group_id))
+                
+
                 result = self.cursor.execute(
                     f"""
                     SELECT permission
-                    from users
-                    WHERE chat_id = ?""",
-                    (chat_id,),
+                    from {table_name}
+                    WHERE user_id = ?""",
+                    (user_id,),
                 )
                 result = result.fetchone()
 
@@ -64,23 +69,25 @@ def required_permission(permission_level):
                         str(permission_level),
                     )
                     if int(result[0]) >= int(permission_level):
-                        func(self, chat_id, *args, **kwargs)
+                        func(self, group_id, user_id,message_data, *args, **kwargs)
                     else:
                         return self.send_message(
-                            chat_id,
-                            f'недостаточно прав. минимальный уровень прав "{self.parse_permission_to_str(permission_level)}",\
-                                                  ваши права "{self.parse_permission_to_str(result[0])}"',
+                            group_id,
+                            f'недостаточно прав. минимальный уровень прав "{self.parse_permission_to_str(permission_level)}",\nваши права "{self.parse_permission_to_str(result[0])}"',
+                            reply_to_message_id=msg_id,
                         )
                 else:
                     return self.send_message(
-                        chat_id,
-                        "пользователь не найден,используйте /start или обратитесь к разработчику",
+                        group_id,
+                        "пользователь не найден,используйте /start или обратитесь к разработчику \\get_admin_link()\\",
+                        reply_to_message_id=msg_id,
                     )
             except Exception as e:
                 logger.error("ошибка при проверке прав: %s", str(e))
                 self.send_message(
-                    chat_id,
-                    f"ошибка при проверке прав: {type(e).__name__}, обратитесь к разработчику",
+                    group_id,
+                    f"ошибка при проверке прав: {type(e).__name__}, обратитесь к разработчику \\get_admin_link()\\",
+                    reply_to_message_id=msg_id,
                 )
 
         return wrapper
@@ -125,14 +132,18 @@ class TelegramBot:
 
     @staticmethod
     def parse_permission(permission):
-        permission_map = {
-            "base": Permissions.BASE,
-            "moder": Permissions.MODER,
-            "admin": Permissions.ADMIN,
-            "developer": Permissions.DEV,
-            "logger": Permissions.LOGGER,
-        }
-        return permission_map.get(permission.lower())
+        try:
+            permission_map = {
+                "base": Permissions.BASE,
+                "moder": Permissions.MODER,
+                "admin": Permissions.ADMIN,
+                "developer": Permissions.DEV,
+                "logger": Permissions.LOGGER,
+            }
+            return permission_map.get(permission.lower())
+        except Exception as e:
+            logger.info(f"Ошибка при парсинге permission: {e}")
+            return None
 
     def parse_permission_to_str(self, permission):
         permission_map = {
@@ -188,20 +199,21 @@ class TelegramBot:
     def connect_users_db(self, db_file):
         self.conn = sqlite3.connect(db_file, check_same_thread=False)
         self.cursor = self.conn.cursor()
-        self.cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS users (
-                chat_id INTEGER PRIMARY KEY,
-                username TEXT,
-                permission INTEGER DEFAULT 0
-            )
-        """
-        )
-        self.conn.commit()
+        # self.cursor.execute(
+        #     """
+        #     CREATE TABLE IF NOT EXISTS users (
+        #         chat_id INTEGER PRIMARY KEY,
+        #         username TEXT,
+        #         permission INTEGER DEFAULT 0
+        #     )
+        # """
+        # )
+        # self.conn.commit()
 
-    def get_user_permission(self, chat_id):
+    def get_user_permission(self, user_id,group_id):
+        table_name = "group_"+str(abs(group_id))
         result = self.cursor.execute(
-            "SELECT permission FROM users WHERE chat_id = ?", (chat_id,)
+            f"SELECT permission FROM {table_name} WHERE user_id = ?", (user_id,)
         ).fetchone()
 
         if result and result[0] is not None:
@@ -209,87 +221,92 @@ class TelegramBot:
         else:
             return Permissions.BASE  # Значение по умолчанию
 
-    def get_chat_id_by_username(self, username: str):
-        if username.startswith("@"):
-            username = username[1:]
-        result = self.cursor.execute(
-            "SELECT chat_id FROM users WHERE username = ?", (username,)
-        ).fetchone()
-        if result:
-            return result[0]
-        else:
-            logger.error(f"Пользователь с именем {username} не найден")
-            raise ValueError(f"Пользователь с именем {username} не найден")
+    def get_chat_id_by_username(self, username: str, group_id:int):
+        try:
+            if username.startswith("@"):
+                username = username[1:]
+            table_name = "group_"+str(abs(group_id))
 
-    @required_permission(Permissions.MODER)
-    def set_user_pemission(self, chat_id, username_to_set_permission, permission):
+            result = self.cursor.execute(
+                f"SELECT user_id FROM {table_name} WHERE username = ?", (username,)
+            ).fetchone()
+            if result:
+                return result[0]
+            else:
+                logger.error(f"Пользователь с именем {username} не найден")
+                raise ValueError(f"Пользователь с именем {username} не найден")
+        except Exception as e:
+            logger.info(f"Ошибка при получении chat_id по имени пользователя: {e}")
+            
+    def set_user_pemission(self,group_id, user_id,username_to_set_permission:str, permission: str | Permissions | None):
+        
         if isinstance(permission, str):
             permission = self.parse_permission(permission)
 
         if permission is None:
-            self.send_message(chat_id, "неверный уровень доступа")
+            self.send_message(group_id, "неверный уровень доступа")
             return
 
         if username_to_set_permission is None:
-            self.send_message(chat_id, "неверный формат команды")
+            self.send_message(group_id, "неверный формат команды")
             return
 
         chat_id_to_set_permission = self.get_chat_id_by_username(
-            username_to_set_permission
+            username_to_set_permission,group_id
         )
-
+        table_name = "group_" + str(abs(group_id))
         if (
             chat_id_to_set_permission is None
             or not self.cursor.execute(
-                "SELECT 1 FROM users WHERE username = ?", (username_to_set_permission,)
+                f"SELECT 1 FROM {table_name} WHERE username = ?", (username_to_set_permission,)
             ).fetchone()
         ):
-            self.send_message(chat_id, "пользователь не найден")
+            self.send_message(group_id, "пользователь не найден")
             return
 
         if (
-            self.get_user_permission(chat_id)
-            > self.get_user_permission(chat_id_to_set_permission)
-            and self.get_user_permission(chat_id) >= permission
+            self.get_user_permission(user_id,group_id)
+            > self.get_user_permission(chat_id_to_set_permission,group_id)
+            and self.get_user_permission(user_id,group_id) >= permission
         ):
 
             try:
 
                 self.cursor.execute(
-                    f"UPDATE users SET permission = ? WHERE chat_id = ?",
+                    f"UPDATE {table_name} SET permission = ? WHERE user_id = ?",
                     (permission, chat_id_to_set_permission),
                 )
                 self.conn.commit()
-                self.send_message(chat_id, f"успешно")
+                self.send_message(group_id, f"успешно")
                 self.send_message(
-                    chat_id_to_set_permission,
-                    f"вам выдали права {self.parse_permission_to_str(permission)}",
+                    group_id,
+                    f"@{username_to_set_permission} вам выдали права {self.parse_permission_to_str(permission)}",
                 )
             except Exception as e:
-                self.send_message(chat_id, f"ошибка {type(e).__name__}")
+                self.send_message(group_id, f"ошибка {e}")
 
         elif (
-            self.get_user_permission(chat_id) == Permissions.DEV
-            and not self.get_user_permission(chat_id_to_set_permission)
+            self.get_user_permission(user_id,group_id) == Permissions.DEV
+            and not self.get_user_permission(chat_id_to_set_permission,group_id)
             == Permissions.DEV
-        ) or str(chat_id) == str(self.logger_chat_id):
+        ) or str(user_id) == str(self.logger_chat_id):
             try:
 
                 self.cursor.execute(
-                    f"UPDATE users SET permission = ? WHERE chat_id = ?",
+                    f"UPDATE {table_name} SET permission = ? WHERE user_id = ?",
                     (permission, chat_id_to_set_permission),
                 )
                 self.conn.commit()
-                self.send_message(chat_id, f"успешно")
+                self.send_message(group_id, f"успешно")
                 self.send_message(
-                    chat_id_to_set_permission,
-                    f"вам выдали права {self.parse_permission_to_str(permission)}",
+                    group_id,
+                    f"@{username_to_set_permission} вам выдали права {self.parse_permission_to_str(permission)}",
                 )
             except Exception as e:
-                self.send_message(chat_id, f"ошибка {type(e).__name__}")
+                self.send_message(group_id, f"ошибка {e}")
         else:
             self.send_message(
-                chat_id, "ты чо балбес чтоль где то по условиям не сошлось"
+                group_id, "ты чо балбес чтоль где то по условиям не сошлось"
             )
 
     def add_user(self, chat_id, username, permission=Permissions.BASE):
@@ -514,21 +531,27 @@ class TelegramBot:
         if chat_type == "private":
             self.send_message(
                 chat_id,
-                "Привет! Я бот для управления комментариями. Используйте команды для добавления и удаления комментариев.",
+                "привет, я бот для комментов, напиши /register в группе чтобы зарегистрироваться",
             )
             self.add_user(chat_id, self.get_chat_info(chat_id).get("username"))
 
         else:
             self.send_message(
                 chat_id,
-                "Привет! Я бот этой группы. Я реагирую на пересланные сообщения и слежу за запрещенными словами.",
+                "чтобы зарегистрироваться напиши /register",
             )
 
     @required_permission(Permissions.MODER)
-    def handle_add_comment(self, chat_id, text):
+    def handle_add_comment(self, group_id, user_id, message_data):
+        text = message_data.get("text", "")
+        msg_id = message_data.get("message_id")
 
         if len(text.split()) < 3:
-            self.send_message(chat_id, "Используйте /add_comment [text|photo] текст")
+            self.send_message(
+                group_id,
+                "Используйте /add_comment [text|photo] текст",
+                reply_to_message_id=msg_id,
+            )
         else:
             comment_type = text.split()[1]
             comment_text = " ".join(text.split()[2:])
@@ -536,28 +559,41 @@ class TelegramBot:
                 if comment_text not in self.text_comments:
                     self.text_comments.append(comment_text)
                     self.send_message(
-                        chat_id, f"Добавлен текстовый комментарий: {comment_text}"
+                        group_id,
+                        f"Добавлен текстовый комментарий: {comment_text}",
+                        reply_to_message_id=msg_id,
                     )
                 else:
-                    self.send_message(chat_id, "такой комментарий уже существует")
+                    self.send_message(
+                        group_id,
+                        "такой комментарий уже существует",
+                        reply_to_message_id=msg_id,
+                    )
             elif comment_type == "photo":
                 if comment_text not in self.photo_comments:
                     self.photo_comments.append(comment_text)
                     self.send_message(
-                        chat_id, f"Добавлен фото-комментарий: {comment_text}"
+                        group_id,
+                        f"Добавлен фото-комментарий: {comment_text}",
+                        reply_to_message_id=msg_id,
                     )
                 else:
-                    self.send_message(chat_id, "такой комментарий уже существует")
+                    self.send_message(
+                        group_id,
+                        "такой комментарий уже существует",
+                        reply_to_message_id=msg_id,
+                    )
             else:
                 self.send_message(
-                    chat_id,
+                    group_id,
                     "Неверный тип комментария. Используйте /add_comment text или /add_comment photo",
+                    reply_to_message_id=msg_id,
                 )
                 return
             self.save_comments()
 
     @required_permission(Permissions.BASE)
-    def handle_list_comment(self, chat_id):
+    def handle_list_comment(self, group_id,user_id,message_data):
         msg = []
         num = 1
         for i in self.text_comments:
@@ -583,7 +619,7 @@ class TelegramBot:
             )
             num += 1
 
-        if self.get_user_permission(chat_id) == Permissions.LOGGER:
+        if self.get_user_permission(user_id, group_id) == Permissions.LOGGER:
             num = 1
             for key, value in self.scheduled_comments.items():
                 msg.append(f"{key}".center(15, "-"))
@@ -591,12 +627,14 @@ class TelegramBot:
                     msg.append(f"   {num}. {comm}")
                     num += 1
         text = "\n".join(msg)
-        self.send_message(chat_id, text)
+        self.send_message(group_id, text,reply_to_message_id=message_data.get("message_id"))
 
     @required_permission(Permissions.MODER)
-    def handle_delete_comment(self, chat_id, text):
+    def handle_delete_comment(self, group_id, user_id, message_data):
+        text = message_data.get("text")
+        msg_id = message_data.get("message_id")
         if len(text.split()) < 3:
-            self.send_message(chat_id, "/delete_comment [text | photo] [номер]")
+            self.send_message(group_id, "/delete_comment [text | photo] [номер]",reply_to_message_id=msg_id)
             return
         comment_type = text.split()[1]
         del_num = text.split()[2]
@@ -608,12 +646,12 @@ class TelegramBot:
                     self.text_comments.pop(del_num - 1)
                     self.save_comments()
                     self.send_message(
-                        chat_id, f"Комментарий №{del_num} ({del_txt}) удален"
+                        group_id, f"Комментарий №{del_num} ({del_txt}) удален",reply_to_message_id=msg_id
                     )
                     return
                 else:
                     self.send_message(
-                        chat_id, "Нет такого номера. используй /comment_list"
+                        group_id, "Нет такого номера. используй /comment_list",reply_to_message_id=msg_id
                     )
                     return
 
@@ -623,12 +661,12 @@ class TelegramBot:
                     self.photo_comments.pop(del_num - 1)
                     self.save_comments()
                     self.send_message(
-                        chat_id, f"Комментарий №{del_num} ({del_txt}) удален"
+                        group_id, f"Комментарий №{del_num} ({del_txt}) удален",reply_to_message_id=msg_id
                     )
                     return
                 else:
                     self.send_message(
-                        chat_id, "Нет такого номера. используй /comment_list"
+                        group_id, "Нет такого номера. используй /comment_list",reply_to_message_id=msg_id
                     )
                     return
             elif comment_type == "schedule":
@@ -644,15 +682,17 @@ class TelegramBot:
                                     del self.scheduled_comments[key]
                                 self.save_comments()
                                 self.send_message(
-                                    chat_id,
+                                    group_id,
                                     f"Комментарий №{del_num} ({del_txt}) ({key}) удален",
+                                    reply_to_message_id=msg_id
                                 )
                                 return
 
-                self.send_message(chat_id, "такой комментарий не найден")
+                self.send_message(group_id, "такой комментарий не найден",reply_to_message_id=msg_id)
+
 
         else:
-            self.send_message(chat_id, "Введите число")
+            self.send_message(group_id, "Введите число",reply_to_message_id=msg_id)
 
     @required_permission(Permissions.ADMIN)
     def handle_get_user_info(self, chat_id, text):
@@ -732,28 +772,41 @@ class TelegramBot:
             self.send_message(chat_id, f"Ошибка при отправке ответа: {str(e)}")
 
     @required_permission(Permissions.MODER)
-    def handle_set_permission(self, chat_id, text):
+    def handle_set_permission(self, group_id,user_id,message_data):
         try:
-            if len(text.split()) != 3:
-                self.send_message(
-                    chat_id, "Используйте: /set_permission [username] [permission]"
-                )
-                return
-            _, username, permission = text.split()
+            logger.info(f"Получено сообщение: {message_data}")
+            if isinstance(message_data,dict):
+                text = message_data["text"]
+                msg_id = message_data["message_id"]
+                if len(text.split()) != 3:
+                    self.send_message(
+                        group_id, "Используйте: /set_permission [username] [permission]",
+                        reply_to_message_id=msg_id
+                    )
+                    return
+                _, username, permission = text.split()
 
-            if username.startswith("@"):
-                username = username[1:]
+                if username.startswith("@"):
+                    username = username[1:]
 
-            if self.parse_permission(permission) is None:
-                self.send_message(
-                    chat_id, "Неверное значение разрешения (BASE,MODER,ADMIN)"
-                )
+                if self.parse_permission(permission) is None:
+                    self.send_message(
+                        group_id, "Неверное значение разрешения (BASE,MODER,ADMIN,LOGGER)",
+                        reply_to_message_id=msg_id
+                    )
+                    return
+                self.set_user_pemission(group_id,user_id, username, permission)
+            else:
+                self.send_message(group_id, "Неверный формат данных для команды /set_permission")
                 return
-            self.set_user_pemission(chat_id, username, permission)
         except ValueError:
             self.send_message(
-                chat_id, "Используйте: /set_permission [username] [permission]"
+                group_id, "Используйте: /set_permission [username] [permission]",
+                reply_to_message_id=msg_id
             )
+        except Exception as e:
+            self.send_message(group_id, f"Ошибка при выполнении команды /set_permission: {e}")
+            logger.error(f"Ошибка при выполнении команды /set_permission: {e}")
 
     @required_permission(Permissions.BASE)
     def handle_get_users_list(self, chat_id):
@@ -770,7 +823,9 @@ class TelegramBot:
         self.send_message(chat_id, self.help_msg)
 
     @required_permission(Permissions.LOGGER)
-    def handle_set_schedule_comment(self, chat_id, text):
+    def handle_set_schedule_comment(self, group_id,user_id,message_data):
+        text = message_data.get("text")
+        msg_id = message_data.get("message_id")
         if len(text.split()) < 3:
             url = f"{self.base_url}/sendMessage"
 
@@ -785,9 +840,10 @@ class TelegramBot:
                 ]
             }
             payload = {
-                "chat_id": chat_id,
+                "chat_id": group_id,
                 "text": "нажми на кнопку чтобы запланировать комментарий",
                 "reply_markup": keyboard,
+                "reply_to_message_id": msg_id
             }
             try:
                 requests.post(url, json=payload)
@@ -797,7 +853,7 @@ class TelegramBot:
                 logger.error(f"ошибка при отправке соо с кнопкой {e}")
                 requests.post(
                     url,
-                    json={"chat_id": chat_id, "text": "ошибка при отправке сообщения"},
+                    json={"chat_id": group_id, "text": "ошибка при отправке сообщения","reply_to_message_id":msg_id},
                 )
         else:
             date = text.split()[1]
@@ -811,33 +867,13 @@ class TelegramBot:
             self.save_comments()
 
             self.send_message(
-                chat_id, f"комментарий ```{msg}``` добавлен на дату {date}"
+                group_id, f"комментарий ```{msg}``` добавлен на дату {date}",reply_to_message_id=msg_id
             )
 
     def handle_private_message(self, chat_id, text, message_id, message_data):
         """Обработка личных сообщений"""
         if text and not text.startswith("/"):
-            self.send_message(
-                chat_id, f"Вы написали: {text}", reply_to_message_id=message_id
-            )
-        elif text.startswith("/add_comment"):
-            self.handle_add_comment(chat_id, text)
-        elif text.startswith("/comment_list"):
-            self.handle_list_comment(chat_id)
-        elif text.startswith("/delete_comment"):
-            self.handle_delete_comment(chat_id, text)
-        elif text.startswith("/get_user_info"):
-            self.handle_get_user_info(chat_id, text)
-        elif text.startswith("/answer"):
-            self.handle_answer(chat_id, text, message_data)
-        elif text.startswith("/set_permission"):
-            self.handle_set_permission(chat_id, text)
-        elif text.startswith("/get_users_list"):
-            self.handle_get_users_list(chat_id)
-        elif text.startswith("/help"):
-            self.handle_help(chat_id)
-        elif text.startswith("/set_schedule_comment"):
-            self.handle_set_schedule_comment(chat_id, text)
+            self.send_message(chat_id, f"мармелад", reply_to_message_id=message_id)
 
     def get_forwarded_channel_info(self, message_data):
         """Получает информацию о канале, из которого переслано сообщение"""
@@ -857,11 +893,72 @@ class TelegramBot:
             logger.error(f"Ошибка получения информации о канале: {e}")
             return None
 
+    def handle_register(self, group_id, user_id, message_data):
+        message_id = message_data["message_id"]
+        table_name = f"group_{abs(group_id)}"
+        username = self.get_chat_info(user_id)["username"]
+
+        self.cursor.execute(
+            f"""
+                CREATE TABLE IF NOT EXISTS {table_name} (
+                    user_id INTEGER PRIMARY KEY,
+                    username TEXT,
+                    permission INTEGER DEFAULT 0
+                )
+            """
+        )
+        self.cursor.execute(
+            f"""INSERT OR IGNORE INTO {table_name} (user_id, username) VALUES (?, ?)""",
+            (user_id, username),
+        )
+        self.conn.commit()
+        if self.cursor.rowcount > 0:
+            logger.info(
+                f"Добавлен новый пользователь:{self.get_forwarded_channel_info(message_data)} {user_id}, {username}"
+            )
+            self.send_message(
+                group_id, "Вы успешно зарегистрированы!", reply_to_message_id=message_id
+            )
+            self.send_message(
+                self.logger_chat_id,
+                f"Новый пользователь: @{self.get_chat_info(user_id).get('username')}",
+            )
+            return True
+        else:
+            logger.info(f"Пользователь уже существует: {user_id},{group_id}")
+            self.send_message(
+                group_id, "Вы уже зарегистрированы!", reply_to_message_id=message_id
+            )
+
+        self.conn.commit()
+
+    def process_group_commands(self, message_data):
+        user_id = message_data["from"]["id"]
+        group_id = message_data["chat"]["id"]
+        cmds = {
+            "/register": self.handle_register,
+            "/add_comment": self.handle_add_comment,
+            "/comment_list": self.handle_list_comment,
+            "/delete_comment": self.handle_delete_comment,
+            "/set_permission": self.handle_set_permission,
+            "/set_schedule_comment": self.handle_set_schedule_comment,
+        }
+        text = message_data.get("text", "")
+        cmd = text.split()[0]
+        if cmd in cmds:
+            cmds[cmd](group_id=group_id,user_id=user_id,message_data=message_data)
+
     def handle_group_message(self, message_data):
         """Обработка сообщений в группах"""
         chat_id = message_data["chat"]["id"]
         message_id = message_data["message_id"]
         text = message_data.get("text", "")
+        if text.startswith("/"):
+            self.process_group_commands(message_data)
+            return
+        # if text.startswith("/register"):
+        #     self.handle_register(message_data)
+        #     return
         caption = message_data.get("caption", "")
 
         logger.info(
@@ -875,7 +972,6 @@ class TelegramBot:
             logger.info("Обнаружено пересланное сообщение!")
             return self.handle_forwarded_message(message_data)
         else:
-            # ИСПРАВЛЕНИЕ: Безопасное получение username
             from_user = message_data.get("from", {})
             username = (
                 from_user.get("username", "неизвестно")
