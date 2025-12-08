@@ -52,14 +52,25 @@ def required_permission(permission_level):
                 if isinstance(group_id, int):
                     table_name = "group_" + str(abs(group_id))
                 
-
-                result = self.cursor.execute(
-                    f"""
-                    SELECT permission
-                    from {table_name}
-                    WHERE user_id = ?""",
-                    (user_id,),
-                )
+                try:
+                    result = self.cursor.execute(
+                        f"""
+                        SELECT permission
+                        from {table_name}
+                        WHERE user_id = ?""",
+                        (user_id,),
+                    )
+                except sqlite3.OperationalError as e:
+                    if "no such table" in str(e):
+                        return self.send_message(
+                            group_id,
+                            "таблица не найдена, возможно вы не зарегистрированы в базе"
+                        )
+                    else:
+                        return self.send_message(
+                            group_id,
+                            "внутренняя ошибка базы данных, обратитесь к разработчику \\get_admin_link()\\ "
+                        )
                 result = result.fetchone()
 
                 if result:
@@ -126,6 +137,7 @@ class TelegramBot:
             f"/add_comment [text | photo] [text] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n"
             f"/delete_comment [text | photo] [id] - доступно от {self.parse_permission_to_str(Permissions.MODER)}\n"
             f"/set_permission [username] [permission] - доступно от {self.parse_permission_to_str(Permissions.ADMIN)}\n"
+            f"/set_schedule_comment [command] - доступно от {self.parse_permission_to_str(Permissions.DEV)}\n"
             f"/get_user_info [chat_id | username] - доступно от очень {self.parse_permission_to_str(Permissions.LOGGER)}\n"
             f"/answer [text] - уникальная команда - доступно от очень {self.parse_permission_to_str(Permissions.LOGGER)}"
         )
@@ -362,19 +374,22 @@ class TelegramBot:
 
     def load_comments(self):
         with open("comments.json", "r", encoding="utf-8") as f:
-            comment_data = json.load(f)
-            self.text_comments: list = comment_data["text"]
-            self.photo_comments: list = comment_data["photo"]
-            self.scheduled_comments: dict = comment_data["scheduled"]
+            self.comment_data = json.load(f)
+
+            # self.text_comments: list = comment_data["text"]
+            # self.photo_comments: list = comment_data["photo"]
+            # self.scheduled_comments: dict = comment_data["scheduled"]
 
     def save_comments(self):
         with open("comments.json", "w") as f:
             json.dump(
-                {
-                    "text": self.text_comments,
-                    "photo": self.photo_comments,
-                    "scheduled": self.scheduled_comments,
-                },
+                self.comment_data,
+                # {group_name:{
+                #     "text": self.comment_data[group_name]["text"],
+                #     "photo": self.comment_data[group_name]["photo"],
+                #     "scheduled": self.comment_data[group_name]["scheduled"],
+                #     }
+                # },
                 f,
             )
 
@@ -571,9 +586,10 @@ class TelegramBot:
         else:
             comment_type = text.split()[1]
             comment_text = " ".join(text.split()[2:])
+            group_name = "group_"+str(abs(group_id))
             if comment_type == "text":
-                if comment_text not in self.text_comments:
-                    self.text_comments.append(comment_text)
+                if comment_text not in self.comment_data[group_name]["text"]:
+                    self.comment_data[group_name]["text"].append(comment_text)
                     self.send_message(
                         group_id,
                         f"Добавлен текстовый комментарий: {comment_text}",
@@ -586,8 +602,8 @@ class TelegramBot:
                         reply_to_message_id=msg_id,
                     )
             elif comment_type == "photo":
-                if comment_text not in self.photo_comments:
-                    self.photo_comments.append(comment_text)
+                if comment_text not in self.comment_data[group_name]["photo"]:
+                    self.comment_data[group_name]["photo"].append(comment_text)
                     self.send_message(
                         group_id,
                         f"Добавлен фото-комментарий: {comment_text}",
@@ -612,7 +628,11 @@ class TelegramBot:
     def handle_list_comment(self, group_id,user_id,message_data):
         msg = []
         num = 1
-        for i in self.text_comments:
+        group_name = "group_"+str(abs(group_id))
+        text_comments = self.comment_data[group_name]["text"]
+        photo_comments = self.comment_data[group_name]["photo"]
+        scheduled_comments = self.comment_data[group_name]["scheduled"]
+        for i in text_comments:
             msg.append(
                 f"{num}. {i}"
                 + (
@@ -622,9 +642,9 @@ class TelegramBot:
                 )
             )
             num += 1
-        msg.append("ФОТО".center(60, "="))
+        msg.append("ФОТО".center(50, "="))
         num = 1
-        for i in self.photo_comments:
+        for i in photo_comments:
             msg.append(
                 f"{num}. {i}"
                 + (
@@ -635,13 +655,13 @@ class TelegramBot:
             )
             num += 1
 
-        if self.get_user_permission(user_id, group_id) == Permissions.LOGGER:
-            num = 1
-            for key, value in self.scheduled_comments.items():
-                msg.append(f"{key}".center(15, "-"))
-                for comm in self.scheduled_comments[key]:
-                    msg.append(f"   {num}. {comm}")
-                    num += 1
+        msg.append("ЗАПЛАНИРОВАННЫЕ".center(40,"="))
+        num = 1
+        for key, value in scheduled_comments.items():
+            msg.append(f"{key}".center(15, "-"))
+            for comm in scheduled_comments[key]:
+                msg.append(f"   {num}. {comm}")
+                num += 1
         text = "\n".join(msg)
         self.send_message(group_id, text,reply_to_message_id=message_data.get("message_id"))
 
@@ -654,12 +674,13 @@ class TelegramBot:
             return
         comment_type = text.split()[1]
         del_num = text.split()[2]
+        group_name = "group_" + str(abs(group_id))
         if del_num.isdigit():
             del_num = int(del_num)
             if comment_type == "text":
                 if del_num <= len(self.text_comments):
-                    del_txt = self.text_comments[del_num - 1]
-                    self.text_comments.pop(del_num - 1)
+                    del_txt = self.comment_data[group_name]["text"][del_num - 1]
+                    self.comment_data[group_name]["text"].pop(del_num - 1)
                     self.save_comments()
                     self.send_message(
                         group_id, f"Комментарий №{del_num} ({del_txt}) удален",reply_to_message_id=msg_id
@@ -673,8 +694,8 @@ class TelegramBot:
 
             elif comment_type == "photo":
                 if del_num <= len(self.photo_comments):
-                    del_txt = self.photo_comments[del_num - 1]
-                    self.photo_comments.pop(del_num - 1)
+                    del_txt = self.comment_data[group_name]["photo"][del_num - 1]
+                    self.comment_data[group_name]["photo"].pop(del_num - 1)
                     self.save_comments()
                     self.send_message(
                         group_id, f"Комментарий №{del_num} ({del_txt}) удален",reply_to_message_id=msg_id
@@ -687,15 +708,15 @@ class TelegramBot:
                     return
             elif comment_type == "schedule":
                 num = 1
-                for key, value in self.scheduled_comments.items():
+                for key, value in self.comment_data[group_name]["scheduled"].items():
                     if isinstance(value, list):
                         for comm in value:
                             if num == del_num:
                                 del_txt = value[num - 1]
                                 value.pop(num - 1)
-                                self.scheduled_comments[key] = value
-                                if not self.scheduled_comments[key]:
-                                    del self.scheduled_comments[key]
+                                self.comment_data[group_name]["scheduled"][key] = value
+                                if not self.comment_data[group_name]["scheduled"][key]:
+                                    del self.comment_data[group_name]["scheduled"][key]
                                 self.save_comments()
                                 self.send_message(
                                     group_id,
@@ -835,14 +856,23 @@ class TelegramBot:
         self.send_message(group_id, "\n".join(msg),reply_to_message_id=message_data.get("message_id"))
         logger.info(f"Пользователь {user_id} запросил список пользователей в группе {group_id}")
 
-    @required_permission(Permissions.BASE)
     def handle_help(self, group_id,*args,**kwargs):
         self.send_message(group_id, self.help_msg)
 
-    @required_permission(Permissions.LOGGER)
-    def handle_set_schedule_comment(self, group_id,user_id,message_data):
+    @required_permission(Permissions.DEV)
+    def handle_set_schedule_comment(self, group_id, user_id, message_data):
         text = message_data.get("text")
         msg_id = message_data.get("message_id")
+        group_name = "group_"+str(abs(group_id))
+        
+        # Инициализация данных группы, если их нет
+        if group_name not in self.comment_data:
+            self.comment_data[group_name] = {
+                "text": [],
+                "photo": [],
+                "scheduled": {}
+            }
+        
         if len(text.split()) < 3:
             url = f"{self.base_url}/sendMessage"
 
@@ -851,7 +881,7 @@ class TelegramBot:
                     [
                         {
                             "text": "Запланировать комментарий",
-                            "web_app": {"url": f"{BASE_URL}/date_picker"},
+                            "url":"https://t.me/tvoyatec_bot/date_pick"
                         }
                     ]
                 ]
@@ -860,31 +890,43 @@ class TelegramBot:
                 "chat_id": group_id,
                 "text": "нажми на кнопку чтобы запланировать комментарий",
                 "reply_markup": keyboard,
-                "reply_to_message_id": msg_id
+            #"reply_to_message_id": msg_id
             }
             try:
-                requests.post(url, json=payload)
-                logger.info("соо с кнопкой отправлено")
+                response = requests.post(url, json=payload)
+                logger.info(f"соо с кнопкой отправлено, статус: {response.status_code}")
+                if response.status_code != 200:
+                    logger.error(f"Ошибка отправки: {response.text}")
+                    # Попробуем отправить обычное сообщение без кнопки
+                    self.send_message(
+                        group_id,
+                        "нажми на кнопку чтобы запланировать комментарий\n(извините, кнопка временно не работает)",
+                        reply_to_message_id=msg_id
+                    )
+                else:
+                    logger.info("сообщение с кнопкой успешно отправлено")
 
             except Exception as e:
                 logger.error(f"ошибка при отправке соо с кнопкой {e}")
-                requests.post(
-                    url,
-                    json={"chat_id": group_id, "text": "ошибка при отправке сообщения","reply_to_message_id":msg_id},
+                # Отправляем обычное сообщение об ошибке
+                self.send_message(
+                    group_id,
+                    "ошибка при отправке сообщения с кнопкой",
+                    reply_to_message_id=msg_id
                 )
         else:
             date = text.split()[1]
             msg = " ".join(text.split()[2:])
 
-            if date not in self.scheduled_comments:
-                self.scheduled_comments[date] = []
+            if date not in self.comment_data[group_name]["scheduled"]:
+                self.comment_data[group_name]["scheduled"][date] = []
 
-            self.scheduled_comments[date].append(msg)
+            self.comment_data[group_name]["scheduled"][date].append(msg)
 
             self.save_comments()
 
             self.send_message(
-                group_id, f"комментарий ```{msg}``` добавлен на дату {date}",reply_to_message_id=msg_id
+                group_id, f"комментарий ```{msg}``` добавлен на дату {date}", reply_to_message_id=msg_id
             )
 
     def handle_private_message(self, chat_id, text, message_id, message_data):
@@ -914,6 +956,7 @@ class TelegramBot:
         message_id = message_data["message_id"]
         table_name = f"group_{abs(group_id)}"
         username = self.get_chat_info(user_id)["username"]
+        
 
         self.cursor.execute(
             f"""
@@ -924,11 +967,23 @@ class TelegramBot:
                 )
             """
         )
+        self.cursor.execute(f"SELECT 1 FROM {table_name}")
+        if len(self.cursor.fetchall()) <= 0 or username == "GroupAnonymousBot":
+            permission = 3
+        else:
+            permission = 0
+            
         self.cursor.execute(
-            f"""INSERT OR IGNORE INTO {table_name} (user_id, username) VALUES (?, ?)""",
-            (user_id, username),
+            f"""INSERT OR IGNORE INTO {table_name} (user_id, username,permission) VALUES (?, ?,?)""",
+            (user_id, username, permission),
         )
         self.conn.commit()
+        if table_name not in self.comment_data:
+            self.comment_data[table_name] = {"text":["круто"],
+                                             "photo":["восхитительно"],
+                                             "scheduled":{}
+                                             }
+            self.save_comments()
         if self.cursor.rowcount > 0:
             logger.info(
                 f"Добавлен новый пользователь:{self.get_forwarded_channel_info(message_data)} {user_id}, {username}"
@@ -940,14 +995,12 @@ class TelegramBot:
                 self.logger_chat_id,
                 f"Новый пользователь: @{self.get_chat_info(user_id).get('username')}",
             )
-            return True
         else:
             logger.info(f"Пользователь уже существует: {user_id},{group_id}")
             self.send_message(
                 group_id, "Вы уже зарегистрированы!", reply_to_message_id=message_id
             )
 
-        self.conn.commit()
 
     def process_group_commands(self, message_data):
         user_id = message_data["from"]["id"]
@@ -963,7 +1016,7 @@ class TelegramBot:
         chat_id = message_data["chat"]["id"]
         for cmd,act in self.private_cmds.items():
             if message_data["text"].startswith(cmd):
-                act(chat_id=chat_id,message_data=message_data)
+                act(chat_id,message_data)
                 break
         else:
             for cmd in self.group_cmds.keys():
@@ -1063,6 +1116,7 @@ class TelegramBot:
         message_id = message_data["message_id"]
         media_group_id = message_data.get("media_group_id")
         caption = message_data.get("caption", "")
+        group_name = "group_"+str(abs(chat_id))
 
         # ИСПРАВЛЕНИЕ: Безопасное получение username
         chat_info = self.get_chat_info(chat_id)
@@ -1176,19 +1230,19 @@ class TelegramBot:
 
         # Выбор типа комментария
         if any(media_type in message_data for media_type in ["photo", "video"]):
-            comment = random.choice(self.photo_comments)
+            comment = random.choice(self.comment_data[group_name]["photo"])
         else:
-            comment = random.choice(self.text_comments)
+            comment = random.choice(self.comment_data[group_name]["text"])
 
         # Избегаем повторения предыдущего комментария
         while comment == self.prevcomment and (
-            len(self.photo_comments) > 1 or len(self.text_comments) > 1
+            len(self.comment_data[group_name]["photo"]) > 1 or len(self.comment_data[group_name]["text"]) > 1
         ):
             logger.info("идет подбор комментария")
             if any(media_type in message_data for media_type in ["photo", "video"]):
-                comment = random.choice(self.photo_comments)
+                comment = random.choice(self.comment_data[group_name]["photo"])
             else:
-                comment = random.choice(self.text_comments)
+                comment = random.choice(self.comment_data[group_name]["text"])
 
         # Замена шаблонов в комментарии
         if re.findall(r"{{\w+}}", comment):
@@ -1233,10 +1287,11 @@ class TelegramBot:
     def check_scheduled(self, chat_id, message_id):
         today = datetime.datetime.now(moscow_tz).strftime("%Y-%m-%d")
         logger.info(f"сегодня {today}")
-        for key, value in self.scheduled_comments.items():
+        group_name = "group_"+str(abs(chat_id))
+        for key, value in self.comment_data[group_name]["scheduled"].items():
             logger.info(f"{today}, {key}")
             if today == key:
-                for comm in self.scheduled_comments[key]:
+                for comm in self.comment_data[group_name]["scheduled"][key]:
                     self.send_message(chat_id, comm, reply_to_message_id=message_id)
 
 
@@ -1318,6 +1373,9 @@ def webhook_status():
 
     return jsonify(result)
 
+@app.route("/tgbot/date_picker", methods=["GET"])
+def date_picker():
+    return render_template("date_pick.html")
 
 @app.route("/tgbot/test", methods=["GET"])
 def test():

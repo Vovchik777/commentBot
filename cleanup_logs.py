@@ -9,7 +9,7 @@ import json
 import time
 import logging
 
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv
 
@@ -32,10 +32,15 @@ def cleanup_task():
             if (current_time - value.get("timestamp", 0)) > 24 * 60 * 60:
                 keys_to_remove.append(key)
 
+        for key in keys_to_remove:
+            del logged_msgs[key]
+
         with open("logged_msgs.json", "w", encoding="utf-8") as f:
             json.dump(logged_msgs, f, ensure_ascii=False, indent=2)
 
         logger.info(f"удалено {len(keys_to_remove)} старых логов")
+        logger.info(f"{logged_msgs}")
+        logger.info(f"осталось {len(logged_msgs)}")
 
         if keys_to_remove:
             BOT_TOKEN = os.getenv("BOT_TOKEN")
