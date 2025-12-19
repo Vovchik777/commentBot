@@ -16,9 +16,9 @@ LOGGER_CHAT_ID = getenv("LOGGER_CHAT_ID")
 base_url = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
-def get_chat_info(chat_id):
+def get_user_info(user_id):
     url = f"{base_url}/getChat"
-    payload = {"chat_id": chat_id}
+    payload = {"chat_id": user_id}
 
     try:
         response = requests.post(url, json=payload)
@@ -33,35 +33,44 @@ def get_chat_info(chat_id):
         logger.error(f"Ошибка запроса getChat: {e}")
         return None
 
-def update():
-    conn = sqlite3.connect("users.db")
+def update(db_path = "users.db"):
+    conn = sqlite3.connect(db_path)
 
     cursor = conn.cursor()
 
-    users = cursor.execute("SELECT chat_id, username FROM users").fetchall()
+    cursor.execute("SELECT name from sqlite_master WHERE type='table' AND name LIKE 'group_%'")
+    tables = [row[0] for row in cursor.fetchall()]
+    # Инициализация users перед циклом
+    users = [] 
+    for table in tables:
+        cursor.execute(f"SELECT user_id, username FROM {table}")
+        for user_id, username in cursor.fetchall():
+            users.append((table, user_id, username))
+        print(users)
+    # print(users)
 
     for user in users:
         try:
-            chat_id, username = user
-            current_username = get_chat_info(chat_id).get("username")
+            table, user_id, username = user
+            current_username = get_user_info(user_id).get("username")
             if current_username:
                 if current_username != username:
                     cursor.execute(
-                        "UPDATE users SET username = ? WHERE chat_id = ?",
-                        (current_username, chat_id),
+                        f"UPDATE {table} SET username = ? WHERE user_id = ?",
+                        (current_username, user_id),
                     )
                     conn.commit()
                     logging.info(
-                        f"Обновлен пользователь @{username} на @{current_username}, {chat_id=}"
+                        f"Обновлен пользователь @{username} на @{current_username}, {user_id=}"
                     )
                     payload = {
                         "chat_id": LOGGER_CHAT_ID,
-                        "text": f"Обновлен пользователь {username} на {current_username}, {chat_id=}"
+                        "text": f"Обновлен пользователь {username} на {current_username}, {user_id=}"
                     }
                     requests.post(f"{base_url}/sendMessage",json=payload)
         except Exception as e:
-            logging.error("ошибка при обновлении пользователя")
+            logging.error("ошибка при обновлении пользователя", e)
         
 if __name__ == "__main__":
-    update()
+    update('users.db')
     logger.info("обновление закончилось")

@@ -6,4 +6,5 @@ banwords.py
 *.json
 *.conf
 *.db
+*.pyc
 test.py

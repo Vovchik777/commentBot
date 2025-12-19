@@ -248,15 +248,25 @@ class TelegramBot:
         else:
             return Permissions.BASE  # Значение по умолчанию
 
-    def get_chat_id_by_username(self, username: str, group_id:int):
+    def get_chat_id_by_username(self, username: str, group_id:int | None = None):
         try:
             if username.startswith("@"):
                 username = username[1:]
-            table_name = "group_"+str(abs(group_id))
+            if group_id:
+                table_name = "group_"+str(abs(group_id))
 
-            result = self.cursor.execute(
-                f"SELECT user_id FROM {table_name} WHERE username = ?", (username,)
-            ).fetchone()
+                result = self.cursor.execute(
+                    f"SELECT user_id FROM {table_name} WHERE username = ?", (username,)
+                ).fetchone()
+            else:
+                self.cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'group_%'")
+                tables = [row[0] for row in self.cursor.fetchall()]
+                for table_name in tables:
+                    result = self.cursor.execute(
+                        f"SELECT user_id FROM {table_name} WHERE username = ?", (username,)
+                    ).fetchone()
+                    if result:
+                        break
             if result:
                 return result[0]
             else:
@@ -654,14 +664,14 @@ class TelegramBot:
                 )
             )
             num += 1
-
-        msg.append("ЗАПЛАНИРОВАННЫЕ".center(40,"="))
-        num = 1
-        for key, value in scheduled_comments.items():
-            msg.append(f"{key}".center(15, "-"))
-            for comm in scheduled_comments[key]:
-                msg.append(f"   {num}. {comm}")
-                num += 1
+        if scheduled_comments:
+            msg.append("ЗАПЛАНИРОВАННЫЕ".center(40,"="))
+            num = 1
+            for key, value in scheduled_comments.items():
+                msg.append(f"{key}".center(15, "-"))
+                for comm in scheduled_comments[key]:
+                    msg.append(f"   {num}. {comm}")
+                    num += 1
         text = "\n".join(msg)
         self.send_message(group_id, text,reply_to_message_id=message_data.get("message_id"))
 
