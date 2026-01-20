@@ -18,7 +18,6 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
 def cleanup_task():
     try:
         if os.path.exists("logged_msgs.json"):
@@ -56,13 +55,11 @@ def cleanup_task():
                 logger.info("уведомление отправлено в логгер чат")
 
             else:
-                logger.warning(
-                    "не удалось отправить уведомление в логгер чат: отсутствует токен или ID"
-                )
+                logger.warning("не удалось отправить уведомление в логгер чат: отсутствует токен или ID")
+
 
     except Exception as e:
         logger.error(f"Ошибка при очистке: {e}")
-
 
 if __name__ == "__main__":
     cleanup_task()

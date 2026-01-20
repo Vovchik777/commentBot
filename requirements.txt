@@ -1,4 +1,5 @@
-aiogram>=3.0.0
-aiohttp>=3.8.0
-python-dotenv>=1.0.0
-faker==24.8.0
+Flask==3.0.0
+python-dotenv==1.0.0
+requests==2.31.0
+pytz==2023.3
+Faker==19.6.1

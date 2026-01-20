@@ -5,7 +5,7 @@ import sys
 import requests
 import logging
 
-sys.path.append(path.dirname(path.abspath(__file__)))
+#sys.path.append(path.dirname(path.abspath(__file__)))
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -27,10 +27,10 @@ def get_user_info(user_id):
         if result.get("ok"):
             return result.get("result")
         else:
-            logger.error(f"Ошибка получения информации о чате: {result}")
+            logger.error(f"{url}\nОшибка получения информации о чате: {result}")
             return None
     except Exception as e:
-        logger.error(f"Ошибка запроса getChat: {e}")
+        logger.error(f"{url}\nОшибка запроса getChat: {e}")
         return None
 
 def update(db_path = "users.db"):
@@ -52,22 +52,26 @@ def update(db_path = "users.db"):
     for user in users:
         try:
             table, user_id, username = user
-            current_username = get_user_info(user_id).get("username")
-            if current_username:
-                if current_username != username:
-                    cursor.execute(
-                        f"UPDATE {table} SET username = ? WHERE user_id = ?",
-                        (current_username, user_id),
-                    )
-                    conn.commit()
-                    logging.info(
-                        f"Обновлен пользователь @{username} на @{current_username}, {user_id=}"
-                    )
-                    payload = {
-                        "chat_id": LOGGER_CHAT_ID,
-                        "text": f"Обновлен пользователь {username} на {current_username}, {user_id=}"
-                    }
-                    requests.post(f"{base_url}/sendMessage",json=payload)
+            user_info = get_user_info(user_id)
+            if user_info:
+                current_username = user_info.get("username")
+                if current_username:
+                    if current_username != username:
+                        cursor.execute(
+                            f"UPDATE {table} SET username = ? WHERE user_id = ?",
+                            (current_username, user_id),
+                        )
+                        conn.commit()
+                        logging.info(
+                            f"Обновлен пользователь @{username} на @{current_username}, {user_id=}"
+                        )
+                        payload = {
+                            "chat_id": LOGGER_CHAT_ID,
+                            "text": f"Обновлен пользователь {username} на {current_username}, {user_id=}"
+                        }
+                        requests.post(f"{base_url}/sendMessage",json=payload)
+            else:
+                logging.error(f"Не удалось получить информацию о пользователе {user_id}")
         except Exception as e:
             logging.error("ошибка при обновлении пользователя", e)
         
