@@ -122,7 +122,7 @@ class TestLogsManager:
 
         # Создаем тестовые данные со старыми timestamp
         old_timestamp = 176893696.488514  # Старая дата
-        current_timestamp = 1768936696.488514  # Текущая дата
+        current_timestamp = 1769103862.79629  # Текущая дата
 
         test_data = {
             "old": {

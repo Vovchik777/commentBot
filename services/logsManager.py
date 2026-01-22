@@ -37,7 +37,7 @@ class LogsManager:
         self, bot_msg_id: int, chat_id: int, message_id: int, text: str
     ) -> Optional[Dict[str, Any]]:
 
-        current_time = utils.time_utils.get_moscow_now()
+        current_time: datetime.datetime = utils.time_utils.get_moscow_now()
 
         self.logged_msgs[str(bot_msg_id)] = {
             "chat_id": chat_id,

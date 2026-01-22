@@ -10,12 +10,10 @@ logger = logging.getLogger(__name__)
 class DataBaseManager:
     def __init__(self, db_file: str):
         self.db_file = db_file
-        # Используем локальное хранилище для каждого потока
         self.local = threading.local()
         logger.info(f"DatabaseManager инициализирован для файла: {db_file}")
 
     def _get_connection(self):
-        """Возвращает соединение с БД для текущего потока"""
         if not hasattr(self.local, "conn") or self.local.conn is None:
             self.local.conn = sqlite3.connect(
                 self.db_file, check_same_thread=False, timeout=10.0
@@ -24,12 +22,10 @@ class DataBaseManager:
         return self.local.conn
 
     def _get_cursor(self):
-        """Возвращает курсор для текущего потока"""
         conn = self._get_connection()
         return conn.cursor()
 
     def create_group_table(self, group_id: int) -> None:
-        """Создает таблицу для группы"""
         table_name = f"group_{abs(group_id)}"
         cursor = self._get_cursor()
         try:
@@ -49,7 +45,6 @@ class DataBaseManager:
             raise
 
     def get_user(self, user_id: int, group_id: int) -> Optional[User]:
-        """Получает информацию о пользователе в группе"""
         try:
             table_name = f"group_{abs(group_id)}"
             cursor = self._get_cursor()
@@ -68,7 +63,6 @@ class DataBaseManager:
                 )
             return None
         except sqlite3.OperationalError as e:
-            # Таблица не существует
             logger.warning(f"Таблица для группы {group_id} не существует: {e}")
             return None
         except Exception as e:
@@ -78,9 +72,8 @@ class DataBaseManager:
             return None
 
     def add_user(self, user: User) -> bool:
-        """Добавляет пользователя в группу"""
+
         try:
-            # Создаем таблицу, если ее нет
             self.create_group_table(user.group_id)
 
             cursor = self._get_cursor()
@@ -111,10 +104,52 @@ class DataBaseManager:
             )
             return False
 
+    def delete_user(self, user: User) -> bool:
+        try:
+            cursor = self._get_cursor()
+            cursor.execute(
+                f"DELETE FROM {user.table_name} WHERE user_id = ?",
+                (user.user_id,),
+            )
+            self._get_connection().commit()
+            success = cursor.rowcount > 0
+            if success:
+                logger.info(
+                    f"Удален пользователь {user.username} (ID: {user.user_id}) из группы {user.group_id}"
+                    if user.group_id
+                    else (
+                        f"Удален пользователь {user.username} (ID: {user.user_id})"
+                        if user.username
+                        else (
+                            f"Удален пользователь с ID: {user.user_id}"
+                            if user.user_id
+                            else "Удален пользователь"
+                        )
+                    )
+                )
+            else:
+                logger.warning(
+                    f"Пользователь {user.username} (ID: {user.user_id}) не найден в группе {user.group_id}"
+                    if user.group_id
+                    else (
+                        f"Пользователь {user.username} (ID: {user.user_id}) не найден"
+                        if user.username
+                        else (
+                            f"Пользователь с ID: {user.user_id} не найден"
+                            if user.user_id
+                            else "Пользователь не найден"
+                        )
+                    )
+                )
+
+            return success
+        except Exception as e:
+            logger.error(f"Ошибка при удалении пользователя: {e}")
+            return False
+
     def get_user_by_username(
         self, username: str, group_id: Optional[int] = None
     ) -> Optional[User]:
-        """Находит пользователя по username"""
         try:
             if username.startswith("@"):
                 username = username[1:]
@@ -122,7 +157,6 @@ class DataBaseManager:
             cursor = self._get_cursor()
 
             if group_id:
-                # Ищем в конкретной группе
                 table_name = f"group_{abs(group_id)}"
                 result = cursor.execute(
                     f"SELECT user_id, username, permission FROM {table_name} WHERE username = ?",
@@ -137,7 +171,6 @@ class DataBaseManager:
                         group_id=group_id,
                     )
             else:
-                # Ищем во всех группах
                 cursor.execute(
                     "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'group_%'"
                 )
@@ -149,7 +182,6 @@ class DataBaseManager:
                         (username,),
                     ).fetchone()
                     if result:
-                        # Извлекаем ID группы из имени таблицы
                         group_id_from_table = int(table_name.split("_")[1])
                         return User(
                             user_id=result[0],
@@ -166,7 +198,6 @@ class DataBaseManager:
     def update_user_permission(
         self, user: User, new_permission: PermissionLevel
     ) -> bool:
-        """Обновляет права пользователя"""
         try:
             cursor = self._get_cursor()
             cursor.execute(
@@ -187,7 +218,6 @@ class DataBaseManager:
             return False
 
     def get_all_users_in_group(self, group_id: int) -> List[User]:
-        """Возвращает всех пользователей группы"""
         try:
             table_name = f"group_{abs(group_id)}"
             cursor = self._get_cursor()
@@ -209,17 +239,7 @@ class DataBaseManager:
 
             return users
         except sqlite3.OperationalError:
-            # Таблица не существует
             return []
         except Exception as e:
             logger.error(f"Ошибка получения пользователей группы {group_id}: {e}")
             return []
-
-    def close_all_connections(self):
-        """Закрывает все соединения для всех потоков"""
-        try:
-            # Этот метод сложно реализовать для threading.local
-            # Вместо этого будем полагаться на автоматическое закрытие при завершении потоков
-            pass
-        except:
-            pass

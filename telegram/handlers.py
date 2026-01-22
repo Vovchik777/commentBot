@@ -4,7 +4,7 @@ import re
 from typing import Dict, Any, List
 import requests
 
-from database.models import PermissionLevel
+from database.models import PermissionLevel, User
 from telegram.permissions import required_permission
 
 logger = logging.getLogger(__name__)
@@ -26,6 +26,7 @@ class MessageHandler:
             "/help": self.handle_help,
             "/admin_msg": self.handle_admin_msg,
             "/register": self.handle_register,
+            "/unregister": self.handle_unregister,
             "/add_comment": self.handle_add_comment,
             "/comment_list": self.handle_list_comment,
             "/delete_comment": self.handle_delete_comment,
@@ -37,13 +38,16 @@ class MessageHandler:
     def _create_help_message(self) -> str:
         return (
             f"/help - помощь - доступно от {PermissionLevel.BASE.to_string()}\n"
+            f"/register - зарегистрироваться - доступно от {PermissionLevel.BASE.to_string()}\n"
+            f"/unregister - удалить себя из базы - доступно от {PermissionLevel.BASE.to_string()}\n"
+            f"/admin_msg [text] - отправить сообщение админу - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/get_users_list - получить список пользователей - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/comment_list - список комментов - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/add_comment [text | photo] [text] - доступно от {PermissionLevel.MODER.to_string()}\n"
             f"/delete_comment [text | photo] [id] - доступно от {PermissionLevel.MODER.to_string()}\n"
             f"/set_permission [username] [permission] - доступно от {PermissionLevel.ADMIN.to_string()}\n"
-            f"/set_schedule_comment [command] - доступно от {PermissionLevel.DEV.to_string()}\n"
-            f"/get_user_info [chat_id | username] - доступно от очень {PermissionLevel.LOGGER.to_string()}\n"
+            f"/set_schedule_comment [command | null] - доступно от {PermissionLevel.DEV.to_string()}\n"
+            f"/get_user_info [chat_id | username] - доступно от очень {PermissionLevel.DEV.to_string()}\n"
             f"/answer [text] - уникальная команда - доступно от очень {PermissionLevel.LOGGER.to_string()}"
         )
 
@@ -217,7 +221,7 @@ class MessageHandler:
             }
             self.bot.send_message(
                 chat_id,
-                "пользователь не найден,используйте /start или обратитесь к разработчику",
+                "пользователь не найден,используйте /register или обратитесь к разработчику",
                 reply_to_message_id=message_data["message_id"],
                 reply_markup=keyboard,
             )
@@ -281,8 +285,6 @@ class MessageHandler:
         else:
             permission = PermissionLevel.BASE
 
-        from database.models import User
-
         user = User(
             user_id=user_id, username=username, permission=permission, group_id=chat_id
         )
@@ -307,6 +309,34 @@ class MessageHandler:
     def handle_help(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         self.bot.send_message(chat_id, self.help_msg)
+
+    @required_permission(PermissionLevel.BASE)
+    def handle_unregister(self, message_data: Dict[str, Any]) -> None:
+        try:
+            user_id = message_data["from"]["id"]
+            chat_id = message_data["chat"]["id"]
+            delete_user = self.bot.db.get_user(user_id, chat_id)
+            if delete_user:
+                success = self.bot.db.delete_user(delete_user)
+                if success:
+                    self.bot.send_message(
+                        chat_id,
+                        "Вы успешно удалены из списка пользователей!",
+                        reply_to_message_id=message_data.get("message_id"),
+                    )
+                else:
+                    self.bot.send_message(
+                        chat_id,
+                        "Произошла ошибка при удалении пользователя. Попробуйте позже.",
+                        reply_to_message_id=message_data.get("message_id"),
+                    )
+        except Exception as e:
+            logger.error(f"Error in handle_unregister: {e}")
+            self.bot.send_message(
+                chat_id,
+                "Произошла ошибка",
+                reply_to_message_id=message_data.get("message_id"),
+            )
 
     @required_permission(PermissionLevel.BASE)
     def handle_get_users_list(self, message_data: Dict[str, Any]) -> None:
@@ -439,7 +469,7 @@ class MessageHandler:
 
     @required_permission(PermissionLevel.MODER)
     def handle_delete_comment(self, message_data: Dict[str, Any]) -> None:
-        """Обработка команды /delete_comment [text|photo|scheduled] [номер]"""
+
         chat_id = message_data["chat"]["id"]
         text = message_data.get("text", "")
         msg_id = message_data.get("message_id")
@@ -620,13 +650,11 @@ class MessageHandler:
             reply_markup=keyboard,
         )
 
+    @required_permission(PermissionLevel.DEV)
     def handle_get_user_info(self, message_data: Dict[str, Any]) -> None:
-        """Обработка команды /get_user_info [chat_id|username] (только для логгера)"""
+
         chat_id = message_data["chat"]["id"]
         text = message_data.get("text", "")
-
-        if str(chat_id) != self.bot.config.LOGGER_CHAT_ID:
-            return
 
         parts = text.split()
         if len(parts) < 2:
@@ -664,7 +692,6 @@ class MessageHandler:
             )
 
     def handle_answer(self, message_data: Dict[str, Any]) -> None:
-        """Обработка команды /answer [текст] (только для логгера)"""
         chat_id = message_data["chat"]["id"]
         text = message_data.get("text", "")
 

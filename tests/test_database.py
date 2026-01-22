@@ -97,6 +97,25 @@ class TestDataBaseManager:
 
         assert result is not None
 
+    def test_delete_user_success(self, db_manager, sample_user):
+        """Тест успешного удаления пользователя"""
+        # Сначала добавляем пользователя
+        db_manager.add_user(sample_user)
+
+        # Удаляем пользователя
+        success = db_manager.delete_user(sample_user)
+        assert success is True
+
+        # Проверяем, что пользователь удален
+        user = db_manager.get_user(sample_user.user_id, sample_user.group_id)
+        assert user is None
+
+    def test_delete_nonexistent_user(self, db_manager, sample_user):
+        """Тест удаления несуществующего пользователя"""
+        # Пытаемся удалить пользователя, которого нет в базе
+        success = db_manager.delete_user(sample_user)
+        assert success is False
+
     def test_add_and_get_user(self, db_manager, sample_user):
         """Тест добавления и получения пользователя"""
         # Добавляем пользователя

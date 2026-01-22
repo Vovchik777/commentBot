@@ -105,7 +105,7 @@ class TestPermissionsDecorator:
         # Моки вспомогательных методов
         mock_self._send_insufficient_permissions = Mock()
         mock_self._send_permission_error = Mock()
-        mock_self._user_not_found = Mock()
+        mock_self._send_user_not_found = Mock()
 
         # Тестовые данные
         message_data = {
@@ -120,7 +120,7 @@ class TestPermissionsDecorator:
         # Проверяем, что функция не была вызвана
         assert not mock_func.called
         # Проверяем, что был вызван метод для пользователя не найден
-        mock_self._user_not_found.assert_called_once()
+        mock_self._send_user_not_found.assert_called_once()
 
     def test_required_permission_exception(self):
         """Тест обработки исключений"""
@@ -140,7 +140,7 @@ class TestPermissionsDecorator:
         # Моки вспомогательных методов
         mock_self._send_insufficient_permissions = Mock()
         mock_self._send_permission_error = Mock()
-        mock_self._user_not_found = Mock()
+        mock_self._send_user_not_found = Mock()
 
         # Тестовые данные
         message_data = {

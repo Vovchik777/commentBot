@@ -26,7 +26,7 @@ def required_permission(permission_level: PermissionLevel) -> Callable:
                     )
 
                 if not user:
-                    return self._user_not_found(chat_id, message_data)
+                    return self._send_user_not_found(chat_id, message_data)
 
                 if user.permission >= permission_level:
                     return func(self, message_data, *args, **kwargs)
