@@ -3,25 +3,31 @@ import os
 import logging
 import dotenv
 import requests
+from config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 dotenv.load_dotenv()
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-LOGGER_CHAT_ID = os.getenv("LOGGER_CHAT_ID")
+cfg = Config()
+cfg.validate()
+
+BOT_TOKEN = cfg.BOT_TOKEN
+LOGGER_CHAT_ID = cfg.LOGGER_CHAT_ID
+
+RESERVE_COMMENTS_FILE = os.path.dirname(cfg.COMMENTS_FILE) + "/reserve_comments.json"
 
 
 def save_reserve_comments():
     try:
-        with open("comments.json", "r", encoding="utf-8") as f:
+        with open(cfg.COMMENTS_FILE, "r", encoding="utf-8") as f:
             comments = json.load(f)
     except FileNotFoundError:
-        logger.warning("файл comments.json не найден")
+        logger.warning(f"файл {cfg.COMMENTS_FILE} не найден")
         return
-    
-    with open("reserve_comments.json", "w", encoding="utf-8") as f:
+
+    with open(RESERVE_COMMENTS_FILE, "w", encoding="utf-8") as f:
         json.dump(comments, f, ensure_ascii=False, indent=2)
     logger.info("резервная копия комментариев сохранена")
     if BOT_TOKEN and LOGGER_CHAT_ID:

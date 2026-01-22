@@ -1,10 +1,10 @@
 .env
 comments.py
 banwords.py
-
+test.py
 *.env
 *.json
 *.conf
 *.db
 *.pyc
-test.py
+

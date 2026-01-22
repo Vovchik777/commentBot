@@ -13,6 +13,7 @@ from services.logsManager import LogsManager
 from utils.time_utils import get_moscow_datetime_str, get_moscow_now
 from .handlers import MessageHandler
 from storage.banwords import banwords
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class TelegramBot:
         try:
             chat_id = message_data["chat"]["id"]
             message_id = message_data["message_id"]
-
+            media_group_id = -1
             self.set_message_reaction(chat_id, message_id)
 
             is_media = any(
@@ -74,7 +75,7 @@ class TelegramBot:
             for mgid in list(self.album_types.keys()):
                 if (
                     mgid not in self.album_timestamps
-                    or (current_time - self.album_timestamps[mgid]).total_seconds() > 30
+                    or (current_time - self.album_timestamps[mgid]) > 30
                 ):
                     if mgid in self.album_types:
                         del self.album_types[mgid]
