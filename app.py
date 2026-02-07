@@ -34,9 +34,7 @@ def webhook():
         data = request.get_json()
         logger.info(f"Тип update: {list(data.keys())}")
 
-
-        if "message" in data:
-            bot.process_update(data)
+        bot.process_update(data)
 
         return jsonify({"status": "ok"})
 

@@ -1,10 +1,13 @@
+from cmath import inf
 import logging
+import random
 import time
 import re
 from typing import Dict, Any, List
 import requests
 
 from database.models import PermissionLevel, User
+from storage.banwords import banwords
 from telegram.permissions import required_permission
 
 logger = logging.getLogger(__name__)
@@ -20,12 +23,14 @@ class MessageHandler:
             "/admin_msg": self.handle_admin_msg,
             "/answer": self.handle_answer,
             "/get_user_info": self.handle_get_user_info,
+            "/get_banwords": self.handle_get_banwords,
         }
 
         self.group_commands = {
             "/help": self.handle_help,
             "/admin_msg": self.handle_admin_msg,
             "/register": self.handle_register,
+            "/get_banwords": self.handle_get_banwords,
             "/unregister": self.handle_unregister,
             "/add_comment": self.handle_add_comment,
             "/comment_list": self.handle_list_comment,
@@ -33,6 +38,7 @@ class MessageHandler:
             "/set_permission": self.handle_set_permission,
             "/set_schedule_comment": self.handle_set_schedule_comment,
             "/get_users_list": self.handle_get_users_list,
+            "/get_user_info": self.handle_get_user_info,
         }
 
     def _create_help_message(self) -> str:
@@ -40,6 +46,7 @@ class MessageHandler:
             f"/help - помощь - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/register - зарегистрироваться - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/unregister - удалить себя из базы - доступно от {PermissionLevel.BASE.to_string()}\n"
+            f"/get_banwords - получить список запрещенных слов - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/admin_msg [text] - отправить сообщение админу - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/get_users_list - получить список пользователей - доступно от {PermissionLevel.BASE.to_string()}\n"
             f"/comment_list - список комментов - доступно от {PermissionLevel.BASE.to_string()}\n"
@@ -47,8 +54,8 @@ class MessageHandler:
             f"/delete_comment [text | photo] [id] - доступно от {PermissionLevel.MODER.to_string()}\n"
             f"/set_permission [username] [permission] - доступно от {PermissionLevel.ADMIN.to_string()}\n"
             f"/set_schedule_comment [command | null] - доступно от {PermissionLevel.DEV.to_string()}\n"
-            f"/get_user_info [chat_id | username] - доступно от очень {PermissionLevel.DEV.to_string()}\n"
-            f"/answer [text] - уникальная команда - доступно от очень {PermissionLevel.LOGGER.to_string()}"
+            f"/get_user_info [chat_id | username] - доступно от {PermissionLevel.DEV.to_string()}\n"
+            f"/answer [text] - уникальная команда - доступно от {PermissionLevel.LOGGER.to_string()}"
         )
 
     def process_message(self, message_data: Dict[str, Any]) -> None:
@@ -62,6 +69,12 @@ class MessageHandler:
                 f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}"
             )
             logger.info(f"Полные данные сообщения: {message_data}")
+            self.bot.db.check_username(
+                message_data.get("from", {}).get("id"),
+                message_data.get("from", {}).get("username", ""),
+            )
+            time.sleep(0.1)
+            self.bot.check_banwords(message_data)
 
             if text == "/start":
                 self.handle_start(chat_id, chat_type)
@@ -76,6 +89,7 @@ class MessageHandler:
         except Exception as e:
             logger.error(f"Ошибка обработки сообщения: {e}")
 
+    @required_permission(PermissionLevel.BASE)
     def handle_start(self, chat_id: int, chat_type: str) -> None:
         if chat_type == "private":
             self.bot.send_message(
@@ -88,23 +102,52 @@ class MessageHandler:
                 "чтобы зарегистрироваться напиши /register",
             )
 
+    @required_permission(PermissionLevel.BASE)
+    def handle_get_banwords(self, message_data: Dict[str, Any]) -> None:
+        chat_id = message_data["chat"]["id"]
+        msg = ""
+        for word, reply in banwords.items():
+            msg += f"<b>{word}</b> - {reply}\n"
+
+        (
+            self.bot.send_message(
+                chat_id, msg, reply_to_message_id=message_data["message_id"]
+            )
+            if msg
+            else self.bot.send_message(chat_id, "нет банвордов")
+        )
+
     def handle_private_message(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         text = message_data.get("text", "")
         message_id = message_data.get("message_id")
 
-        if str(chat_id) == self.bot.config.LOGGER_CHAT_ID:
-            if text.startswith("/"):
-                for cmd, handler in self.private_commands.items():
-                    if text.startswith(cmd):
-                        handler(message_data)
-                        return
-        else:
+        if not (str(chat_id) == self.bot.config.LOGGER_CHAT_ID):
             self._log_private_message(message_data)
 
-            if text and not text.startswith("/"):
-                text = "мармелад" if not ("мармелад" in text) else "нет"
-                self.bot.send_message(chat_id, text, reply_to_message_id=message_id)
+        self.handle_private_commands(message_data)
+
+        if text and not text.startswith("/"):
+            text = "мармелад" if not ("мармелад" in text.lower()) else "нет"
+            self.bot.send_message(chat_id, text, reply_to_message_id=message_id)
+
+    def handle_private_commands(self, message_data: Dict[str, Any]) -> None:
+        text = message_data.get("text", "")
+
+        for cmd, handler in self.private_commands.items():
+            if text.startswith(cmd):
+                if cmd in self.private_commands.keys():
+                    logger.info(f"Вызвана команда: {cmd}")
+                    handler(message_data)
+                    return
+
+        for cmd in self.group_commands.keys():
+            if text.startswith(cmd):
+                self.bot.send_message(
+                    message_data["chat"]["id"],
+                    "не могу выполнить в лс",
+                    reply_to_message_id=message_data["message_id"],
+                )
 
     def handle_group_message(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
@@ -128,10 +171,9 @@ class MessageHandler:
 
     def handle_group_commands(self, message_data: Dict[str, Any]) -> None:
         text = message_data.get("text", "")
-        user_cmd = text.split()[0] if text else ""
 
         for cmd, handler in self.group_commands.items():
-            if user_cmd.startswith(cmd):
+            if text.startswith(cmd):
                 logger.info(f"Вызвана команда: {cmd}")
                 handler(message_data)
                 return
@@ -148,7 +190,23 @@ class MessageHandler:
 
         log_message = f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text}]"
 
-        msg_result = self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, log_message)
+        reply_to = (
+            int(
+                list(
+                    self.bot.logs_manager.get_bot_message_info(
+                        message_data.get("reply_to_message", {}).get("message_id", {})
+                    ).keys()
+                )[0]
+            )
+            if self.bot.logs_manager.get_bot_message_info(
+                message_data.get("reply_to_message", {}).get("message_id", {})
+            )
+            else None
+        )
+
+        msg_result = self.bot.send_message(
+            self.bot.config.LOGGER_CHAT_ID, log_message, reply_to
+        )
 
         if msg_result and isinstance(msg_result, dict) and msg_result.get("ok"):
             bot_msg_id = msg_result.get("result", {}).get("message_id")
@@ -177,13 +235,28 @@ class MessageHandler:
             if channel_info
             else f"СООБЩЕНИЕ ИЗ {group_type}"
         )
+        reply_to = (
+            int(
+                list(
+                    self.bot.logs_manager.get_bot_message_info(
+                        message_data.get("reply_to_message", {}).get("message_id", {})
+                    ).keys()
+                )[0]
+            )
+            if self.bot.logs_manager.get_bot_message_info(
+                message_data.get("reply_to_message", {}).get("message_id", {})
+            )
+            else None
+        )
 
         log_message = (
             f"{channel_text}\n"
             f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text or caption or 'нет текста'}]"
         )
 
-        msg_result = self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, log_message)
+        msg_result = self.bot.send_message(
+            self.bot.config.LOGGER_CHAT_ID, log_message, reply_to
+        )
 
         if msg_result:
             if isinstance(msg_result, list):
@@ -270,7 +343,7 @@ class MessageHandler:
             logger.error(f"Ошибка при отправке сообщения об ошибке прав: {e}")
 
     # ========== КОМАНДЫ ГРУПП ==========
-
+    @required_permission(PermissionLevel.BASE)
     def handle_register(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         user_id = message_data["from"]["id"]
@@ -279,14 +352,26 @@ class MessageHandler:
         chat_info = self.bot.get_chat_info(user_id)
         username = chat_info.get("username", "")
 
-        group_users = self.bot.db.get_all_users_in_group(chat_id)
+        group_users = self.bot.db.get_users_in_group(chat_id)
+
+        # Если это первый пользователь или анонимный админ
         if len(group_users) <= 0 or username == "GroupAnonymousBot":
             permission = PermissionLevel.DEV
+            # Генерируем уникальный юзернейм для анонимного админа
+            if username == "GroupAnonymousBot":
+                import uuid
+
+                # Создаем уникальный идентификатор
+                unique_id = str(uuid.uuid4())[:8]  # Берем первые 8 символов UUID
+                username = f"AnonymousAdmin_{unique_id}"
         else:
             permission = PermissionLevel.BASE
 
         user = User(
-            user_id=user_id, username=username, permission=permission, group_id=chat_id
+            tg_user_id=user_id,
+            username=username,
+            permission=permission,
+            tg_group_id=chat_id,
         )
 
         success = self.bot.db.add_user(user)
@@ -306,6 +391,7 @@ class MessageHandler:
                 chat_id, "Вы уже зарегистрированы!", reply_to_message_id=message_id
             )
 
+    @required_permission(PermissionLevel.BASE)
     def handle_help(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         self.bot.send_message(chat_id, self.help_msg)
@@ -342,7 +428,7 @@ class MessageHandler:
     def handle_get_users_list(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
 
-        users = self.bot.db.get_all_users_in_group(chat_id)
+        users = self.bot.db.get_users_in_group(chat_id)
 
         if not users:
             self.bot.send_message(
@@ -630,6 +716,7 @@ class MessageHandler:
                 reply_to_message_id=msg_id,
             )
 
+    @required_permission(PermissionLevel.BASE)
     def handle_admin_msg(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         keyboard = {
@@ -668,11 +755,11 @@ class MessageHandler:
         try:
             target_chat_id = int(identifier)
         except ValueError:
-            target_user = self.bot.db.get_user_by_username(identifier)
+            target_user = self.bot.db.get_user_by_username(identifier, chat_id)
             if not target_user:
                 self.bot.send_message(chat_id, "Пользователь не найден")
                 return
-            target_chat_id = target_user.user_id
+            target_chat_id = target_user.tg_user_id
 
         user_info = self.bot.get_chat_info(target_chat_id)
 

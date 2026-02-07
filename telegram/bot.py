@@ -133,7 +133,6 @@ class TelegramBot:
                 logger.info(f"Сообщение отправлено в чат {chat_id}: {text[:50]}...")
             else:
                 logger.error(f"Ошибка Telegram API: {result}")
-
             return result
         except requests.exceptions.RequestException as e:
             logger.error(f"Ошибка отправки сообщения: {e}")
@@ -252,10 +251,10 @@ class TelegramBot:
             self.prev_comment = comment
 
             logger.info(f"Отправка комментария в чат {chat_id}: {comment}")
-            return self.send_message(
+            result = self.send_message(
                 chat_id=chat_id, text=comment, reply_to_message_id=message_id
             )
-
+            return result
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None

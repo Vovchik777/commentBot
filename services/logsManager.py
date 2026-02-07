@@ -50,6 +50,13 @@ class LogsManager:
     def get_message_info(self, bot_msg_id: int) -> Optional[Dict[str, Any]]:
         return self.logged_msgs.get(str(bot_msg_id))
 
+    def get_bot_message_info(self, message_id: int) -> Optional[Dict[str, Any]]:
+        for key, value in self.logged_msgs.items():
+            if value.get("message_id") == message_id or key == str(message_id):
+                return {key: value}
+
+        return {}
+
     def cleanup_old_logs(self) -> int:
         current_time = utils.time_utils.get_moscow_now()
         keys_to_remove = []
@@ -64,4 +71,8 @@ class LogsManager:
 
         if keys_to_remove:
             self.save_logs()
-        return len(keys_to_remove)
+        if isinstance(keys_to_remove, list):
+            return len(keys_to_remove)
+
+        else:
+            return -1

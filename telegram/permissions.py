@@ -11,6 +11,11 @@ def required_permission(permission_level: PermissionLevel) -> Callable:
         @wraps(func)
         def wrapper(self, message_data, *args, **kwargs) -> Any:
             try:
+                if not isinstance(message_data, dict):
+                    logger.error(f"Invalid message_data type: {type(message_data)}")
+                    return self._send_permission_error(
+                        chat_id, message_data, ValueError("Invalid message_data type")
+                    )
                 chat_id = message_data.get("chat", {}).get("id")
                 user_id = message_data.get("from", {}).get("id")
 
@@ -19,13 +24,13 @@ def required_permission(permission_level: PermissionLevel) -> Callable:
                     return
                 user = self.bot.db.get_user(user_id, chat_id)
 
-                if not isinstance(message_data, dict):
-                    logger.error(f"Invalid message_data type: {type(message_data)}")
-                    return self._send_permission_error(
-                        chat_id, message_data, ValueError("Invalid message_data type")
-                    )
-
                 if not user:
+                    if (
+                        permission_level <= PermissionLevel.BASE
+                        or chat_id == self.bot.config.LOGGER_CHAT_ID
+                    ):
+                        return func(self, message_data, *args, **kwargs)
+
                     return self._send_user_not_found(chat_id, message_data)
 
                 if user.permission >= permission_level:

@@ -18,9 +18,10 @@ class PermissionLevel(IntEnum):
             "moder": cls.MODER,
             "admin": cls.ADMIN,
             "developer": cls.DEV,
+            "dev": cls.DEV,
             "logger": cls.LOGGER,
         }
-        return mapping.get(value.lower())
+        return mapping.get(value.lower().strip())
 
     def to_string(self) -> str:
         names = {
@@ -35,14 +36,14 @@ class PermissionLevel(IntEnum):
 
 @dataclass
 class User:
-    user_id: int
+    tg_group_id: int
+    tg_user_id: int
     username: str
     permission: PermissionLevel = PermissionLevel.BASE
-    group_id: int = None
 
-    @property
-    def table_name(self) -> str:
-        return f"group_{abs(self.group_id)}"
+    # @property
+    # def table_name(self) -> str:
+    #     return f"group_{abs(self.group_id)}"
 
 
 @dataclass

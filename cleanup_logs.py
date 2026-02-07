@@ -30,13 +30,17 @@ def cleanup_task():
 
         keys_to_remove = LogsManager(cfg.LOGGED_MSGS_FILE).cleanup_old_logs()
 
+        if keys_to_remove == -1:
+            logger.error("keys_to_remove == -1")
+            return
+
         logger.info(f"удалено {keys_to_remove} старых логов")
         logger.info(f"{logged_msgs}")
         logger.info(f"осталось {len(logged_msgs)}")
 
         if keys_to_remove:
-            BOT_TOKEN = os.getenv("BOT_TOKEN")
-            LOGGER_CHAT_ID = os.getenv("LOGGER_CHAT_ID")
+            BOT_TOKEN = cfg.BOT_TOKEN
+            LOGGER_CHAT_ID = cfg.LOGGER_CHAT_ID
             if BOT_TOKEN and LOGGER_CHAT_ID:
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
                 payload = {

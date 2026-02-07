@@ -29,6 +29,7 @@ class Config:
         ]
 
     @classmethod
+    @staticmethod
     def validate(cls):
 
         config = cls()
