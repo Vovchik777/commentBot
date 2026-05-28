@@ -4,7 +4,7 @@ import json
 import tempfile
 import os
 from unittest.mock import patch
-from src.bot.services.logging import LogsManager
+from src.bot.services.message_logging import MessageLogsManager
 
 
 @pytest.fixture
@@ -33,7 +33,7 @@ def empty_logs_file():
 
 @pytest.fixture
 def logs_manager(temp_logs_file):
-    return LogsManager(temp_logs_file)
+    return MessageLogsManager(temp_logs_file)
 
 
 class TestLogsManager:
@@ -41,14 +41,14 @@ class TestLogsManager:
         assert len(logs_manager.logged_msgs) == 2
 
     def test_init_with_new_file(self, empty_logs_file):
-        assert LogsManager(empty_logs_file).logged_msgs == {}
+        assert MessageLogsManager(empty_logs_file).logged_msgs == {}
 
     # ✅ ИСПРАВЛЕНО: Патчим функцию там, где она используется (в logging.py)
     # Путь: src.bot.services.logging.get_moscow_now
     @patch("src.bot.services.logging.get_moscow_now")
     def test_add_message_log(self, mock_time, empty_logs_file):
         mock_time.return_value = 1700000000.0
-        manager = LogsManager(empty_logs_file)
+        manager = MessageLogsManager(empty_logs_file)
         manager.add_message_log(333, 123456, 300, "Тест")
         assert "333" in manager.logged_msgs
         assert manager.logged_msgs["333"]["text"] == "Тест"
@@ -71,7 +71,7 @@ class TestLogsManager:
         with open(temp_logs_file, "w", encoding="utf-8") as f:
             json.dump(test_data, f, ensure_ascii=False)
 
-        manager = LogsManager(temp_logs_file)
+        manager = MessageLogsManager(temp_logs_file)
         assert manager.cleanup_old_logs() == 1
         assert "old" not in manager.logged_msgs
         assert "current" in manager.logged_msgs

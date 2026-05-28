@@ -1,5 +1,4 @@
 from datetime import time
-import logging
 import re
 import threading
 from typing import Any, Dict, List, Optional
@@ -9,13 +8,15 @@ import requests
 from src.config import Config
 from src.database.repository import DataBaseManager
 from src.bot.services.comments import CommentsManager
-from src.bot.services.logging import LogsManager
+from src.bot.services.message_logging import MessageLogsManager
 from src.shared.time_utils import get_moscow_datetime_str, get_moscow_now
 from .handlers.commands import MessageHandler
 from src.bot.utils.banwords import banwords
 import time
 
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_bot_logger
+
+logger = get_bot_logger()
 
 
 class TelegramBot:
@@ -24,7 +25,7 @@ class TelegramBot:
         self.base_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}"
         self.db = DataBaseManager(config.DB_FILE)
         self.comments_manager = CommentsManager(config.COMMENTS_FILE)
-        self.logs_manager = LogsManager(config.LOGGED_MSGS_FILE)
+        self.logs_manager = MessageLogsManager(config.LOGGED_MSGS_FILE)
         self.lock = threading.Lock()
         self.handler = MessageHandler(self)
 
@@ -43,9 +44,7 @@ class TelegramBot:
             media_group_id = -1
             self.set_message_reaction(chat_id, message_id)
 
-            is_media = any(
-                key in message_data for key in ["photo", "video", "document", "audio"]
-            )
+            is_media = any(key in message_data for key in ["photo", "video", "document", "audio"])
 
             if is_media:
                 media_group_id = message_data.get("media_group_id")
@@ -73,10 +72,7 @@ class TelegramBot:
             self.album_timestamps[media_group_id] = current_time
 
             for mgid in list(self.album_types.keys()):
-                if (
-                    mgid not in self.album_timestamps
-                    or (current_time - self.album_timestamps[mgid]) > 30
-                ):
+                if mgid not in self.album_timestamps or (current_time - self.album_timestamps[mgid]) > 30:
                     if mgid in self.album_types:
                         del self.album_types[mgid]
                     if mgid in self.album_timestamps:
@@ -100,13 +96,9 @@ class TelegramBot:
         MAX_LENGHT = 4096
 
         if len(text) <= MAX_LENGHT:
-            return self._send_single_message(
-                chat_id, text, reply_to_message_id, reply_markup, parse_mode
-            )
+            return self._send_single_message(chat_id, text, reply_to_message_id, reply_markup, parse_mode)
         else:
-            return self._send_long_message(
-                chat_id, text, reply_to_message_id, parse_mode
-            )
+            return self._send_long_message(chat_id, text, reply_to_message_id, parse_mode)
 
     def _send_single_message(
         self,
@@ -130,7 +122,7 @@ class TelegramBot:
             result = response.json()
 
             if result.get("ok"):
-                logger.info(f"Сообщение отправлено в чат {chat_id}: {text[:50]}...")
+                logger.info(f"Сообщение отправлено в чат {chat_id}: {text}...")
             else:
                 logger.error(f"Ошибка Telegram API: {result}")
             return result
@@ -167,9 +159,7 @@ class TelegramBot:
         for i, part in enumerate(parts):
             logger.info(f"Отправка части {i+1}/{len(parts)} ({len(part)} символов)")
 
-            result = self._send_single_message(
-                chat_id, part, reply_to_message_id, None, parse_mode
-            )
+            result = self._send_single_message(chat_id, part, reply_to_message_id, None, parse_mode)
 
             results.append(result)
 
@@ -178,9 +168,7 @@ class TelegramBot:
 
         return results
 
-    def set_message_reaction(
-        self, chat_id: int, message_id: int, emoji: str = "🗿"
-    ) -> Dict:
+    def set_message_reaction(self, chat_id: int, message_id: int, emoji: str = "🗿") -> Dict:
         url = f"{self.base_url}/setMessageReaction"
         payload = {
             "chat_id": chat_id,
@@ -192,9 +180,7 @@ class TelegramBot:
             response = requests.post(url, json=payload, timeout=10)
 
             if response.status_code == 429:
-                retry_after = (
-                    response.json().get("parameters", {}).get("retry_after", 5)
-                )
+                retry_after = response.json().get("parameters", {}).get("retry_after", 5)
                 logger.warning(f"Rate limit exceeded. Waiting {retry_after} seconds.")
                 time.sleep(retry_after)
                 return self.set_message_reaction(chat_id, message_id, emoji)
@@ -203,9 +189,7 @@ class TelegramBot:
             result = response.json()
 
             if result.get("ok"):
-                logger.info(
-                    f"Реакция установлена на сообщение {message_id} в чате {chat_id}"
-                )
+                logger.info(f"Реакция установлена на сообщение {message_id} в чате {chat_id}")
             else:
                 logger.warning(f"Не удалось установить реакцию: {result}")
 
@@ -235,9 +219,7 @@ class TelegramBot:
     def get_user_info(self, user_id: int) -> Dict[str, Any]:
         return self.get_chat_info(user_id)
 
-    def send_comment_to_message(
-        self, chat_id: int, message_id: int, is_media: bool = False
-    ) -> Optional[Dict]:
+    def send_comment_to_message(self, chat_id: int, message_id: int, is_media: bool = False) -> Optional[Dict]:
         try:
             comment_type = "photo" if is_media else "text"
 
@@ -251,17 +233,13 @@ class TelegramBot:
             self.prev_comment = comment
 
             logger.info(f"Отправка комментария в чат {chat_id}: {comment}")
-            result = self.send_message(
-                chat_id=chat_id, text=comment, reply_to_message_id=message_id
-            )
+            result = self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
             return result
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None
 
-    def _get_different_comment(
-        self, chat_id: int, comment_type: str, current_comment: str
-    ) -> str:
+    def _get_different_comment(self, chat_id: int, comment_type: str, current_comment: str) -> str:
         group_name = f"group_{abs(chat_id)}"
         comments_data = self.comments_manager.comment_data.get(group_name, {})
 
@@ -277,9 +255,7 @@ class TelegramBot:
         max_attempts = min(10, len(available) * 2)
 
         while attempts < max_attempts:
-            new_comment = self.comments_manager.get_random_comment(
-                chat_id, comment_type
-            )
+            new_comment = self.comments_manager.get_random_comment(chat_id, comment_type)
             if new_comment != current_comment:
                 return new_comment
             attempts += 1
@@ -309,9 +285,7 @@ class TelegramBot:
             today = get_moscow_datetime_str()
             group_name = f"group_{abs(chat_id)}"
 
-            scheduled = self.comments_manager.comment_data.get(group_name, {}).get(
-                "scheduled", {}
-            )
+            scheduled = self.comments_manager.comment_data.get(group_name, {}).get("scheduled", {})
 
             if today in scheduled:
                 logger.info(f"Найдены запланированные комментарии на сегодня ({today})")
@@ -320,9 +294,7 @@ class TelegramBot:
 
                     comment = self.comments_manager.parse_comment_template(comment)
 
-                    self.send_message(
-                        chat_id=chat_id, text=comment, reply_to_message_id=message_id
-                    )
+                    self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
 
                     time.sleep(0.5)
 
@@ -335,9 +307,7 @@ class TelegramBot:
         message_id = message_data["message_id"]
         for key in banwords.keys():
             if re.search(key, text, re.IGNORECASE):
-                self.send_message(
-                    chat_id, banwords.get(key, "нельзя"), reply_to_message_id=message_id
-                )
+                self.send_message(chat_id, banwords.get(key, "нельзя"), reply_to_message_id=message_id)
 
     def cleanup_processed_media_groups(self, max_age_seconds: int = 300) -> None:
         current_time = time.time()

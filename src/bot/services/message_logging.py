@@ -5,10 +5,12 @@ import os
 import src.shared.time_utils as utils
 from typing import Optional, Dict, Any
 
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_bot_logger
+
+logger = get_bot_logger()
 
 
-class LogsManager:
+class MessageLogsManager:
     def __init__(self, logs_file: str):
         self.logs_file = logs_file
 

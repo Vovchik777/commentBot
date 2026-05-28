@@ -4,20 +4,18 @@ import requests
 
 moscow_tz = pytz.timezone("Europe/Moscow")
 import json
-import logging
 import sys, os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.config import Config
-from src.bot.services.logging import LogsManager
+from src.bot.services.message_logging import MessageLogsManager
+from src.shared.logger import get_cron_logger
 
+logger = get_cron_logger()
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 cfg = Config()
 cfg.validate()
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 def cleanup_task():
@@ -28,7 +26,7 @@ def cleanup_task():
         else:
             logged_msgs = {}
 
-        keys_to_remove = LogsManager(cfg.LOGGED_MSGS_FILE).cleanup_old_logs()
+        keys_to_remove = MessageLogsManager(cfg.LOGGED_MSGS_FILE).cleanup_old_logs()
 
         if keys_to_remove == -1:
             logger.error("keys_to_remove == -1")

@@ -1,4 +1,3 @@
-import logging
 import time
 from typing import Dict, Any
 
@@ -6,7 +5,9 @@ from src.database.models import PermissionLevel, User
 from src.bot.utils.banwords import banwords
 from src.bot.utils.permissions import required_permission
 
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_bot_logger
+
+logger = get_bot_logger()
 
 
 class MessageHandler:
@@ -61,9 +62,7 @@ class MessageHandler:
             chat_type = message_data["chat"]["type"]
             text = message_data.get("text", "")
 
-            logger.info(
-                f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}"
-            )
+            logger.info(f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}")
             logger.info(f"Полные данные сообщения: {message_data}")
             self.bot.db.check_username(
                 message_data.get("from", {}).get("id"),
@@ -106,9 +105,7 @@ class MessageHandler:
             msg += f"<b>{word}</b> - {reply}\n"
 
         (
-            self.bot.send_message(
-                chat_id, msg, reply_to_message_id=message_data["message_id"]
-            )
+            self.bot.send_message(chat_id, msg, reply_to_message_id=message_data["message_id"])
             if msg
             else self.bot.send_message(chat_id, "нет банвордов")
         )
@@ -147,9 +144,7 @@ class MessageHandler:
 
     def handle_group_message(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
-        is_forwarded = any(
-            key.startswith("forward") for key in message_data.keys()
-        ) and message_data.get("is_automatic_forward")
+        is_forwarded = any(key.startswith("forward") for key in message_data.keys()) and message_data.get("is_automatic_forward")
         self._log_group_message(message_data, is_forwarded)
 
         if str(chat_id) in self.bot.config.IGNORING_CHAT_IDS:
@@ -187,33 +182,19 @@ class MessageHandler:
         log_message = f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text}]"
 
         reply_to = (
-            int(
-                list(
-                    self.bot.logs_manager.get_bot_message_info(
-                        message_data.get("reply_to_message", {}).get("message_id", {})
-                    ).keys()
-                )[0]
-            )
-            if self.bot.logs_manager.get_bot_message_info(
-                message_data.get("reply_to_message", {}).get("message_id", {})
-            )
+            int(list(self.bot.logs_manager.get_bot_message_info(message_data.get("reply_to_message", {}).get("message_id", {})).keys())[0])
+            if self.bot.logs_manager.get_bot_message_info(message_data.get("reply_to_message", {}).get("message_id", {}))
             else None
         )
 
-        msg_result = self.bot.send_message(
-            self.bot.config.LOGGER_CHAT_ID, log_message, reply_to
-        )
+        msg_result = self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, log_message, reply_to)
 
         if msg_result and isinstance(msg_result, dict) and msg_result.get("ok"):
             bot_msg_id = msg_result.get("result", {}).get("message_id")
             if bot_msg_id:
-                self.bot.logs_manager.add_message_log(
-                    bot_msg_id, chat_id, message_id, text
-                )
+                self.bot.logs_manager.add_message_log(bot_msg_id, chat_id, message_id, text)
 
-    def _log_group_message(
-        self, message_data: Dict[str, Any], is_forwared: bool
-    ) -> None:
+    def _log_group_message(self, message_data: Dict[str, Any], is_forwared: bool) -> None:
         from src.shared.time_utils import get_moscow_datetime_str
 
         chat_id = message_data["chat"]["id"]
@@ -226,33 +207,16 @@ class MessageHandler:
 
         channel_info = self._get_forwarded_channel_info(message_data)
         group_type = "ГРУППЫ" if not is_forwared else "КАНАЛА"
-        channel_text = (
-            f"СООБЩЕНИЕ ИЗ {group_type} {channel_info}"
-            if channel_info
-            else f"СООБЩЕНИЕ ИЗ {group_type}"
-        )
+        channel_text = f"СООБЩЕНИЕ ИЗ {group_type} {channel_info}" if channel_info else f"СООБЩЕНИЕ ИЗ {group_type}"
         reply_to = (
-            int(
-                list(
-                    self.bot.logs_manager.get_bot_message_info(
-                        message_data.get("reply_to_message", {}).get("message_id", {})
-                    ).keys()
-                )[0]
-            )
-            if self.bot.logs_manager.get_bot_message_info(
-                message_data.get("reply_to_message", {}).get("message_id", {})
-            )
+            int(list(self.bot.logs_manager.get_bot_message_info(message_data.get("reply_to_message", {}).get("message_id", {})).keys())[0])
+            if self.bot.logs_manager.get_bot_message_info(message_data.get("reply_to_message", {}).get("message_id", {}))
             else None
         )
 
-        log_message = (
-            f"{channel_text}\n"
-            f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text or caption or 'нет текста'}]"
-        )
+        log_message = f"{channel_text}\n" f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text or caption or 'нет текста'}]"
 
-        msg_result = self.bot.send_message(
-            self.bot.config.LOGGER_CHAT_ID, log_message, reply_to
-        )
+        msg_result = self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, log_message, reply_to)
 
         if msg_result:
             if isinstance(msg_result, list):
@@ -260,15 +224,11 @@ class MessageHandler:
                     if result and isinstance(result, dict) and result.get("ok"):
                         bot_msg_id = result.get("result", {}).get("message_id")
                         if bot_msg_id:
-                            self.bot.logs_manager.add_message_log(
-                                bot_msg_id, chat_id, message_id, text or caption
-                            )
+                            self.bot.logs_manager.add_message_log(bot_msg_id, chat_id, message_id, text or caption)
             elif isinstance(msg_result, dict) and msg_result.get("ok"):
                 bot_msg_id = msg_result.get("result", {}).get("message_id")
                 if bot_msg_id:
-                    self.bot.logs_manager.add_message_log(
-                        bot_msg_id, chat_id, message_id, text or caption
-                    )
+                    self.bot.logs_manager.add_message_log(bot_msg_id, chat_id, message_id, text or caption)
 
     def _get_forwarded_channel_info(self, message_data: Dict[str, Any]) -> str:
         sender_chat = message_data.get("sender_chat")
@@ -295,9 +255,7 @@ class MessageHandler:
                 reply_markup=keyboard,
             )
         except Exception as e:
-            logger.error(
-                f"Ошибка при отправке сообщения о не найденном пользователе: {e}"
-            )
+            logger.error(f"Ошибка при отправке сообщения о не найденном пользователе: {e}")
 
     def _send_insufficient_permissions(
         self,
@@ -309,14 +267,11 @@ class MessageHandler:
 
         self.bot.send_message(
             chat_id,
-            f'недостаточно прав. минимальный уровень прав "{required_permission.to_string()}",\n'
-            f'ваши права "{user_permission.to_string()}"',
+            f'недостаточно прав. минимальный уровень прав "{required_permission.to_string()}",\n' f'ваши права "{user_permission.to_string()}"',
             reply_to_message_id=message_data["message_id"],
         )
 
-    def _send_permission_error(
-        self, chat_id: int, message_data: Dict[str, Any], error: Exception
-    ) -> None:
+    def _send_permission_error(self, chat_id: int, message_data: Dict[str, Any], error: Exception) -> None:
         try:
             keyboard = {
                 "inline_keyboard": [
@@ -375,17 +330,11 @@ class MessageHandler:
         if success:
             self.bot.comments_manager.init_group_comments(chat_id)
 
-            self.bot.send_message(
-                chat_id, "Вы успешно зарегистрированы!", reply_to_message_id=message_id
-            )
+            self.bot.send_message(chat_id, "Вы успешно зарегистрированы!", reply_to_message_id=message_id)
 
-            self.bot.send_message(
-                self.bot.config.LOGGER_CHAT_ID, f"Новый пользователь: @{username}"
-            )
+            self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, f"Новый пользователь: @{username}")
         else:
-            self.bot.send_message(
-                chat_id, "Вы уже зарегистрированы!", reply_to_message_id=message_id
-            )
+            self.bot.send_message(chat_id, "Вы уже зарегистрированы!", reply_to_message_id=message_id)
 
     @required_permission(PermissionLevel.BASE)
     def handle_help(self, message_data: Dict[str, Any]) -> None:
@@ -534,9 +483,7 @@ class MessageHandler:
             )
             return
 
-        success = self.bot.comments_manager.add_comment(
-            comment_type, comment_text, chat_id
-        )
+        success = self.bot.comments_manager.add_comment(comment_type, comment_text, chat_id)
 
         if success:
             self.bot.send_message(
@@ -545,9 +492,7 @@ class MessageHandler:
                 reply_to_message_id=msg_id,
             )
         else:
-            self.bot.send_message(
-                chat_id, "Такой комментарий уже существует", reply_to_message_id=msg_id
-            )
+            self.bot.send_message(chat_id, "Такой комментарий уже существует", reply_to_message_id=msg_id)
 
     @required_permission(PermissionLevel.MODER)
     def handle_delete_comment(self, message_data: Dict[str, Any]) -> None:
@@ -574,9 +519,7 @@ class MessageHandler:
 
         index = int(index_str)
 
-        deleted_comment = self.bot.comments_manager.delete_comment(
-            chat_id, comment_type, index
-        )
+        deleted_comment = self.bot.comments_manager.delete_comment(chat_id, comment_type, index)
 
         if deleted_comment:
             self.bot.send_message(
@@ -623,22 +566,14 @@ class MessageHandler:
 
         target_user = self.bot.db.get_user_by_username(username, chat_id)
         if not target_user:
-            self.bot.send_message(
-                chat_id, "Пользователь не найден", reply_to_message_id=msg_id
-            )
+            self.bot.send_message(chat_id, "Пользователь не найден", reply_to_message_id=msg_id)
             return
 
         current_user = self.bot.db.get_user(user_id, chat_id)
 
         can_change = (
-            (
-                current_user.permission > target_user.permission
-                and current_user.permission >= new_permission
-            )
-            or (
-                current_user.permission == PermissionLevel.DEV
-                and target_user.permission != PermissionLevel.DEV
-            )
+            (current_user.permission > target_user.permission and current_user.permission >= new_permission)
+            or (current_user.permission == PermissionLevel.DEV and target_user.permission != PermissionLevel.DEV)
             or (str(user_id) == str(self.bot.config.LOGGER_CHAT_ID))
         )
 
@@ -659,9 +594,7 @@ class MessageHandler:
                 reply_to_message_id=msg_id,
             )
         else:
-            self.bot.send_message(
-                chat_id, "Ошибка при обновлении прав", reply_to_message_id=msg_id
-            )
+            self.bot.send_message(chat_id, "Ошибка при обновлении прав", reply_to_message_id=msg_id)
 
     @required_permission(PermissionLevel.DEV)
     def handle_set_schedule_comment(self, message_data: Dict[str, Any]) -> None:
@@ -695,9 +628,7 @@ class MessageHandler:
         date = parts[1]
         comment_text = " ".join(parts[2:])
 
-        success = self.bot.comments_manager.add_scheduled_comment(
-            comment_text, chat_id, date
-        )
+        success = self.bot.comments_manager.add_scheduled_comment(comment_text, chat_id, date)
 
         if success:
             self.bot.send_message(
@@ -740,9 +671,7 @@ class MessageHandler:
 
         parts = text.split()
         if len(parts) < 2:
-            self.bot.send_message(
-                chat_id, "Используйте: /get_user_info [chat_id | username]"
-            )
+            self.bot.send_message(chat_id, "Используйте: /get_user_info [chat_id | username]")
             return
 
         identifier = parts[1]
@@ -775,9 +704,7 @@ class MessageHandler:
 
                         self.bot.send_message(chat_id, info_text)
                     else:
-                        self.bot.send_message(
-                            chat_id, "Не удалось получить информацию о пользователе"
-                        )
+                        self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
                 else:
                     user_info = self.bot.get_chat_info(target_user.tg_user_id)
                     if user_info:
@@ -791,9 +718,7 @@ class MessageHandler:
                         )
                         self.bot.send_message(chat_id, info_text)
                     else:
-                        self.bot.send_message(
-                            chat_id, "Не удалось получить информацию о пользователе"
-                        )
+                        self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
             else:
                 user_info = self.bot.get_chat_info(target_chat_id)
                 if user_info:
@@ -807,9 +732,7 @@ class MessageHandler:
                     )
                     self.bot.send_message(chat_id, info_text)
                 else:
-                    self.bot.send_message(
-                        chat_id, "Не удалось получить информацию о пользователе"
-                    )
+                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
         else:
             try:
                 target_chat_id = int(identifier)
@@ -835,9 +758,7 @@ class MessageHandler:
                     )
                     self.bot.send_message(chat_id, info_text)
                 else:
-                    self.bot.send_message(
-                        chat_id, "Не удалось получить информацию о пользователе"
-                    )
+                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
             else:
                 user_info = self.bot.get_chat_info(target_chat_id)
                 if user_info:
@@ -846,9 +767,7 @@ class MessageHandler:
                     if user_in_group:
                         permission_info = f"\nПрава в этой группе: {user_in_group.permission.to_string()}"
                     else:
-                        permission_info = (
-                            "\nПользователь не зарегистрирован в этой группе"
-                        )
+                        permission_info = "\nПользователь не зарегистрирован в этой группе"
 
                     info_text = (
                         f"Данные по чату {target_chat_id}:\n"
@@ -858,9 +777,7 @@ class MessageHandler:
                     )
                     self.bot.send_message(chat_id, info_text)
                 else:
-                    self.bot.send_message(
-                        chat_id, "Не удалось получить информацию о пользователе"
-                    )
+                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
 
     def handle_answer(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
@@ -871,22 +788,16 @@ class MessageHandler:
 
         reply_to_message = message_data.get("reply_to_message")
         if not reply_to_message:
-            self.bot.send_message(
-                chat_id, "Это сообщение не является ответом на другое сообщение"
-            )
+            self.bot.send_message(chat_id, "Это сообщение не является ответом на другое сообщение")
             return
 
         replied_message_id = reply_to_message.get("message_id")
         if not replied_message_id:
-            self.bot.send_message(
-                chat_id, "Не удалось определить сообщение, на которое вы ответили"
-            )
+            self.bot.send_message(chat_id, "Не удалось определить сообщение, на которое вы ответили")
             return
         log_entry = self.bot.logs_manager.get_message_info(replied_message_id)
         if not log_entry:
-            self.bot.send_message(
-                chat_id, f"Сообщение {replied_message_id} не найдено в логах"
-            )
+            self.bot.send_message(chat_id, f"Сообщение {replied_message_id} не найдено в логах")
             return
 
         parts = text.split(" ", 1)

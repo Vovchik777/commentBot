@@ -5,7 +5,9 @@ from typing import Optional, List
 from .models import User, PermissionLevel
 from contextlib import closing
 
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_bot_logger
+
+logger = get_bot_logger()
 
 
 class DataBaseManager:
@@ -21,25 +23,20 @@ class DataBaseManager:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
 
-                cursor.execute(
-                    """
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS users (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         username TEXT UNIQUE,
                         tg_user_id INTEGER UNIQUE
                     )
-                    """
-                ).fetchall()
-                cursor.execute(
-                    """
+                    """).fetchall()
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS groups (
                         id INTEGER PRIMARY KEY AUTOINCREMENT,
                         tg_group_id INTEGER UNIQUE
                     )
-                    """
-                ).fetchall()
-                cursor.execute(
-                    """
+                    """).fetchall()
+                cursor.execute("""
                     CREATE TABLE IF NOT EXISTS users_groups(
                         user_id INTEGER NOT NULL,
                         group_id INTEGER NOT NULL,
@@ -49,8 +46,7 @@ class DataBaseManager:
                         FOREIGN KEY (group_id) REFERENCES groups(id)
 
                     )
-                    """
-                ).fetchall()
+                    """).fetchall()
                 conn.commit()
 
         except sqlite3.Error as e:
@@ -70,9 +66,7 @@ class DataBaseManager:
                 conn.commit()
                 logger.info(f"Таблица {tg_group_id} создана или уже существует")
         except Exception as e:
-            logger.error(
-                f"Ошибка создания таблицы {tg_group_id}: {e, e.__traceback__, e.__cause__, e.__context__}"
-            )
+            logger.error(f"Ошибка создания таблицы {tg_group_id}: {e, e.__traceback__, e.__cause__, e.__context__}")
             raise
 
     def get_user(self, tg_user_id: int, tg_group_id: int) -> Optional[User]:
@@ -105,9 +99,7 @@ class DataBaseManager:
             logger.warning(f"Таблица для группы {tg_group_id} не существует: {e}")
             return None
         except Exception as e:
-            logger.error(
-                f"Ошибка получения пользователя {tg_user_id} из группы {tg_group_id}: {e}"
-            )
+            logger.error(f"Ошибка получения пользователя {tg_user_id} из группы {tg_group_id}: {e}")
             return None
 
     def add_user(self, user: User) -> bool:
@@ -133,15 +125,11 @@ class DataBaseManager:
 
                 if not user_result:
                     # Если не получили результат, значит что-то пошло не так
-                    cursor.execute(
-                        "SELECT id FROM users WHERE tg_user_id = ?", (user.tg_user_id,)
-                    )
+                    cursor.execute("SELECT id FROM users WHERE tg_user_id = ?", (user.tg_user_id,))
                     user_result = cursor.fetchone()
 
                     if not user_result:
-                        logger.error(
-                            f"Не удалось найти или создать пользователя {user.tg_user_id}"
-                        )
+                        logger.error(f"Не удалось найти или создать пользователя {user.tg_user_id}")
                         return False
 
                 user_id = user_result[0]
@@ -165,9 +153,7 @@ class DataBaseManager:
                     )
                     group_result = cursor.fetchone()
                     if not group_result:
-                        logger.error(
-                            f"Не удалось найти или создать группу {user.tg_group_id}"
-                        )
+                        logger.error(f"Не удалось найти или создать группу {user.tg_group_id}")
                         return False
 
                 group_id = group_result[0]
@@ -183,9 +169,7 @@ class DataBaseManager:
                 rowconut = cursor.rowcount > 0
 
                 if rowconut:
-                    logger.info(
-                        f"Пользователь {user.username} уже существует в группе {user.tg_group_id}"
-                    )
+                    logger.info(f"Пользователь {user.username} уже существует в группе {user.tg_group_id}")
                     return False
 
                 # Создаем связь пользователя с группой
@@ -199,26 +183,18 @@ class DataBaseManager:
                 conn.commit()
                 success = cursor.rowcount > 0
                 if success:
-                    logger.info(
-                        f"Добавлен пользователь {user.username} (ID: {user.tg_user_id}) в группу {user.tg_group_id}"
-                    )
+                    logger.info(f"Добавлен пользователь {user.username} (ID: {user.tg_user_id}) в группу {user.tg_group_id}")
                 else:
-                    logger.warning(
-                        f"Не удалось добавить пользователя {user.username} в группу {user.tg_group_id}"
-                    )
+                    logger.warning(f"Не удалось добавить пользователя {user.username} в группу {user.tg_group_id}")
 
                 return success
 
         except sqlite3.IntegrityError as e:
             # Конфликт уникальности - пользователь уже в группе
-            logger.info(
-                f"Пользователь {user.username} уже существует в группе {user.tg_group_id}: {e}"
-            )
+            logger.info(f"Пользователь {user.username} уже существует в группе {user.tg_group_id}: {e}")
             return False
         except Exception as e:
-            logger.error(
-                f"Ошибка добавления пользователя {user.tg_user_id} в группу {user.tg_group_id}: {e}"
-            )
+            logger.error(f"Ошибка добавления пользователя {user.tg_user_id} в группу {user.tg_group_id}: {e}")
             self._get_connection().rollback()
             return False
 
@@ -247,11 +223,7 @@ class DataBaseManager:
                         else (
                             f"Удален пользователь {user.username} (ID: {user.tg_user_id})"
                             if user.username
-                            else (
-                                f"Удален пользователь с ID: {user.tg_user_id}"
-                                if user.tg_user_id
-                                else "Удален пользователь"
-                            )
+                            else (f"Удален пользователь с ID: {user.tg_user_id}" if user.tg_user_id else "Удален пользователь")
                         )
                     )
                 else:
@@ -261,11 +233,7 @@ class DataBaseManager:
                         else (
                             f"Пользователь {user.username} (ID: {user.tg_user_id}) не найден"
                             if user.username
-                            else (
-                                f"Пользователь с ID: {user.tg_user_id} не найден"
-                                if user.tg_user_id
-                                else "Пользователь не найден"
-                            )
+                            else (f"Пользователь с ID: {user.tg_user_id} не найден" if user.tg_user_id else "Пользователь не найден")
                         )
                     )
 
@@ -274,9 +242,7 @@ class DataBaseManager:
             logger.error(f"Ошибка при удалении пользователя: {e}")
             return False
 
-    def get_user_by_username(
-        self, username: str, tg_group_id: Optional[int] = None
-    ) -> Optional[User | List[User]]:
+    def get_user_by_username(self, username: str, tg_group_id: Optional[int] = None) -> Optional[User | List[User]]:
         try:
             with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
                 conn.row_factory = sqlite3.Row
@@ -329,9 +295,7 @@ class DataBaseManager:
             logger.error(f"Ошибка поиска пользователя по username {username}: {e}")
             return None
 
-    def update_user_permission(
-        self, user: User, new_permission: PermissionLevel
-    ) -> bool:
+    def update_user_permission(self, user: User, new_permission: PermissionLevel) -> bool:
         try:
             with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
                 conn.row_factory = sqlite3.Row
@@ -353,9 +317,7 @@ class DataBaseManager:
                 success = cursor.rowcount > 0
                 conn.commit()
                 if success:
-                    logger.info(
-                        f"Обновлены права пользователя {user.tg_user_id} на {new_permission.name}"
-                    )
+                    logger.info(f"Обновлены права пользователя {user.tg_user_id} на {new_permission.name}")
 
                 return success
         except Exception as e:

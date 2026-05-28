@@ -1,6 +1,5 @@
 import json
 import os
-import logging
 import dotenv
 import requests
 import sys, os
@@ -8,8 +7,9 @@ import sys, os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from src.config import Config
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_cron_logger
+
+logger = get_cron_logger()
 
 dotenv.load_dotenv()
 

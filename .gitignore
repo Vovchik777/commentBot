@@ -7,5 +7,5 @@ test.py
 *.conf
 *.db
 *.pyc
-
+logs/
 test.py

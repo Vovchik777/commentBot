@@ -3,8 +3,9 @@ from flask import Flask, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from src.shared.logger import get_bot_logger
+
+logger = get_bot_logger()
 
 
 app = Flask(__name__)
