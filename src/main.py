@@ -1,11 +1,7 @@
 import logging
 from flask import Flask, request, jsonify, render_template
-from config import Config
-from database.manager import DataBaseManager
-from services.commentManager import CommentsManager
-from services.logsManager import LogsManager
-from telegram.bot import TelegramBot
-
+from src.config import Config
+from src.bot.core import TelegramBot
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -99,7 +95,7 @@ def send_admin_msg():
         )
         return jsonify({"status": "ok"})
     except Exception as e:
-        logger.error(f"Ошибка при отправке сообщения админу")
+        logger.error("Ошибка при отправке сообщения админу")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 

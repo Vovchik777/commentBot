@@ -1,7 +1,6 @@
 import sqlite3
 import logging
 import threading
-import time
 from typing import Optional, List
 from .models import User, PermissionLevel
 from contextlib import closing
@@ -277,32 +276,54 @@ class DataBaseManager:
 
     def get_user_by_username(
         self, username: str, tg_group_id: Optional[int] = None
-    ) -> Optional[User]:
+    ) -> Optional[User | List[User]]:
         try:
             with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
                 conn.row_factory = sqlite3.Row
                 cursor = conn.cursor()
                 if username.startswith("@"):
                     username = username[1:]
+                if tg_group_id:
+                    result = cursor.execute(
+                        """
+                        SELECT u.tg_user_id, ug.permission
+                        FROM users AS u
+                        JOIN users_groups AS ug ON u.id = ug.user_id
+                        JOIN groups AS g ON ug.group_id = g.id
+                        WHERE u.username = ? AND g.tg_group_id = ?
+                        """,
+                        (username, tg_group_id),
+                    ).fetchone()
 
-                result = cursor.execute(
-                    """
-                    SELECT u.tg_user_id, ug.permission
-                    FROM users AS u
-                    JOIN users_groups AS ug ON u.id = ug.user_id
-                    JOIN groups AS g ON ug.group_id = g.id
-                    WHERE u.username = ? AND g.tg_group_id = ?
-                    """,
-                    (username, tg_group_id),
-                ).fetchone()
+                    if result:
+                        return User(
+                            tg_group_id=tg_group_id,
+                            tg_user_id=result[0],
+                            username=username,
+                            permission=PermissionLevel(result[1]),
+                        )
+                else:
+                    result = cursor.execute(
+                        """
+                        SELECT u.tg_user_id, u.username, g.tg_group_id, ug.permission
+                        FROM users AS u
+                        JOIN users_groups AS ug ON u.id = ug.user_id
+                        JOIN groups AS g ON ug.group_id = g.id
+                        WHERE u.username = ?
+                        """,
+                        (username,),
+                    ).fetchall()
 
-                if result:
-                    return User(
-                        tg_group_id=tg_group_id,
-                        tg_user_id=result[0],
-                        username=username,
-                        permission=PermissionLevel(result[1]),
-                    )
+                    if result:
+                        return [
+                            User(
+                                tg_user_id=row[0],
+                                username=row[1],
+                                tg_group_id=row[2],
+                                permission=PermissionLevel(row[3]),
+                            )
+                            for row in result
+                        ]
                 return None
         except Exception as e:
             logger.error(f"Ошибка поиска пользователя по username {username}: {e}")

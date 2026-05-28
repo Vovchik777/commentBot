@@ -3,7 +3,10 @@ import os
 import logging
 import dotenv
 import requests
-from config import Config
+import sys, os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.config import Config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -34,7 +37,7 @@ def save_reserve_comments():
         url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
         payload = {
             "chat_id": LOGGER_CHAT_ID,
-            "text": f"резервная копия комментариев сохранена",
+            "text": "резервная копия комментариев сохранена",
         }
         requests.post(url, json=payload)
 
@@ -42,4 +45,4 @@ def save_reserve_comments():
 if __name__ == "__main__":
     save_reserve_comments()
 else:
-    logger.info(f"модуль загружен")
+    logger.info("модуль загружен")

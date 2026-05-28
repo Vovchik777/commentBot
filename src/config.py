@@ -24,18 +24,14 @@ class Config:
 
     def __post_init__(self):
         ignor_chat_ids = os.getenv("IGNORING_CHAT_IDS", "")
-        self.IGNORING_CHAT_IDS = [
-            i.strip() for i in ignor_chat_ids.split(",") if i.strip()
-        ]
+        self.IGNORING_CHAT_IDS = [i.strip() for i in ignor_chat_ids.split(",") if i.strip()]
 
     @classmethod
-    @staticmethod
+    # @staticmethod
     def validate(cls):
 
         config = cls()
         required = ["BOT_TOKEN", "LOGGER_CHAT_ID"]
         missing = [var for var in required if not getattr(config, var)]
         if missing:
-            raise ValueError(
-                f"Отсутствуют обязательные переменные окружения: {missing}"
-            )
+            raise ValueError(f"Отсутствуют обязательные переменные окружения: {missing}")

@@ -1,15 +1,15 @@
 import os
-import sys
-import datetime
 import pytz
 import requests
 
 moscow_tz = pytz.timezone("Europe/Moscow")
 import json
-import time
 import logging
-from config import Config
-from services.logsManager import LogsManager
+import sys, os
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.config import Config
+from src.bot.services.logging import LogsManager
 
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
@@ -51,9 +51,7 @@ def cleanup_task():
                 logger.info("уведомление отправлено в логгер чат")
 
             else:
-                logger.warning(
-                    "не удалось отправить уведомление в логгер чат: отсутствует токен или ID"
-                )
+                logger.warning("не удалось отправить уведомление в логгер чат: отсутствует токен или ID")
 
     except Exception as e:
         logger.error(f"Ошибка при очистке: {e}")

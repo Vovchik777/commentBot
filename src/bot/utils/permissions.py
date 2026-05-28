@@ -1,5 +1,5 @@
 import logging
-from database.models import PermissionLevel
+from src.database.models import PermissionLevel
 from typing import Callable, Any
 from functools import wraps
 
@@ -27,7 +27,7 @@ def required_permission(permission_level: PermissionLevel) -> Callable:
                 if not user:
                     if (
                         permission_level <= PermissionLevel.BASE
-                        or chat_id == self.bot.config.LOGGER_CHAT_ID
+                        or str(user_id) == self.bot.config.LOGGER_CHAT_ID
                     ):
                         return func(self, message_data, *args, **kwargs)
 

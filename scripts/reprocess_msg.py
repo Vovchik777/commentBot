@@ -1,11 +1,11 @@
-import json
 import logging
-from config import Config
-from telegram.bot import TelegramBot
+import sys, os
 
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+from src.config import Config
+from src.bot.core import TelegramBot
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 
@@ -204,9 +204,7 @@ def main():
 
         # Обрабатываем каждое сообщение
         for i, message_data in enumerate(messages_data, 1):
-            logger.info(
-                f"Обработка сообщения {i}/3 (ID: {message_data['message_id']})..."
-            )
+            logger.info(f"Обработка сообщения {i}/3 (ID: {message_data['message_id']})...")
 
             # Создаем update объект
             update = create_update_from_message(message_data, update_id=1000000 + i)

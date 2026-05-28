@@ -2,10 +2,8 @@ import datetime
 import json
 import logging
 import os
-import utils.time_utils
+import src.shared.time_utils as utils
 from typing import Optional, Dict, Any
-
-import pytz
 
 logger = logging.getLogger(__name__)
 
@@ -33,11 +31,9 @@ class LogsManager:
         except Exception as e:
             logger.error(f"Error saving logs: {e}")
 
-    def add_message_log(
-        self, bot_msg_id: int, chat_id: int, message_id: int, text: str
-    ) -> Optional[Dict[str, Any]]:
+    def add_message_log(self, bot_msg_id: int, chat_id: int, message_id: int, text: str) -> Optional[Dict[str, Any]]:
 
-        current_time: datetime.datetime = utils.time_utils.get_moscow_now()
+        current_time: datetime.datetime = utils.get_moscow_now()
 
         self.logged_msgs[str(bot_msg_id)] = {
             "chat_id": chat_id,
@@ -58,7 +54,7 @@ class LogsManager:
         return {}
 
     def cleanup_old_logs(self) -> int:
-        current_time = utils.time_utils.get_moscow_now()
+        current_time = utils.get_moscow_now()
         keys_to_remove = []
 
         for key, value in self.logged_msgs.items():

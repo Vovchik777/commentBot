@@ -6,13 +6,13 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from config import Config
-from database.manager import DataBaseManager
-from services.commentManager import CommentsManager
-from services.logsManager import LogsManager
-from utils.time_utils import get_moscow_datetime_str, get_moscow_now
-from .handlers import MessageHandler
-from storage.banwords import banwords
+from src.config import Config
+from src.database.repository import DataBaseManager
+from src.bot.services.comments import CommentsManager
+from src.bot.services.logging import LogsManager
+from src.shared.time_utils import get_moscow_datetime_str, get_moscow_now
+from .handlers.commands import MessageHandler
+from src.bot.utils.banwords import banwords
 import time
 
 logger = logging.getLogger(__name__)
