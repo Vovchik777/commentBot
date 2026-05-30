@@ -1,5 +1,4 @@
 .env
-comments.py
 banwords.py
 test.py
 *.env
@@ -9,3 +8,5 @@ test.py
 *.pyc
 logs/
 test.py
+temp.py
+project_bundle.md

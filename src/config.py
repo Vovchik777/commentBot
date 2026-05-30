@@ -17,10 +17,10 @@ class Config:
 
     DB_FILE: str = os.getenv("DB_FILE", "storage/users.db")
 
-    COMMENTS_FILE: str = os.getenv("COMMENTS_FILE", "storage/comments.json")
-    LOGGED_MSGS_FILE: str = os.getenv("LOGGED_MSGS_FILE", "storage/logged_msgs.json")
-
     IGNORING_CHAT_IDS: List[str] = field(default_factory=list)
+
+    ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
+    ADMIN_PASS: str = os.getenv("ADMIN_PASS", "secure_pass")
 
     def __post_init__(self):
         ignor_chat_ids = os.getenv("IGNORING_CHAT_IDS", "")

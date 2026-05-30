@@ -1,5 +1,6 @@
+from functools import wraps
 import logging
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, Response, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
 
@@ -17,6 +18,27 @@ config.validate()
 
 bot = TelegramBot(config)
 
+ADMIN_USER = config.ADMIN_USER
+ADMIN_PASS = config.ADMIN_PASS
+
+
+def require_admin(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        auth = request.authorization
+
+        # Если учётные данные не переданы вообще → вызываем попап
+        if not auth:
+            return Response("Доступ защищён", 401, {"WWW-Authenticate": 'Basic realm="Admin Area"'})
+
+        # Если учётные данные переданы, но неверны → блокируем без повторного попапа
+        if auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+            return Response("Доступ запрещён: неверный логин или пароль", 403)
+
+        return f(*args, **kwargs)
+
+    return wrapper
+
 
 @app.route("/tgbot/webhook", methods=["POST"])
 def webhook():
@@ -24,7 +46,7 @@ def webhook():
 
     secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if secret_token != config.SECRET_TOKEN:
-        logger.warning(f"Неавторизованный запрос. Токен: {secret_token}")
+        logger.warning(f"Неавторизованный запрос.")
         return "Unauthorized", 401
 
     try:
@@ -41,6 +63,7 @@ def webhook():
 
 
 @app.route("/tgbot/setup", methods=["GET"])
+@require_admin
 def setup_webhook():
     """Установка вебхука"""
     import requests
@@ -63,6 +86,7 @@ def setup_webhook():
 
 
 @app.route("/tgbot/status", methods=["GET"])
+@require_admin
 def webhook_status():
     """Проверка статуса вебхука"""
     import requests
@@ -74,6 +98,11 @@ def webhook_status():
     logger.info(f"Статус вебхука: {result}")
 
     return jsonify(result)
+
+
+@app.route("/tgbot/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
 
 
 @app.route("/tgbot/date_picker", methods=["GET"])

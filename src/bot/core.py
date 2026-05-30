@@ -24,14 +24,10 @@ class TelegramBot:
         self.config = config
         self.base_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}"
         self.db = DataBaseManager(config.DB_FILE)
-        self.comments_manager = CommentsManager(config.COMMENTS_FILE)
-        self.logs_manager = MessageLogsManager(config.LOGGED_MSGS_FILE)
+        self.comments_manager = CommentsManager(config.DB_FILE)
+        self.logs_manager = MessageLogsManager(config.DB_FILE)
         self.lock = threading.Lock()
         self.handler = MessageHandler(self)
-
-        self.processed_media_groups = {}
-        self.album_types = {}
-        self.album_timestamps = {}
 
         self.prev_comment = ""
 
@@ -41,45 +37,26 @@ class TelegramBot:
         try:
             chat_id = message_data["chat"]["id"]
             message_id = message_data["message_id"]
-            media_group_id = -1
+            media_group_id = message_data.get("media_group_id")
+            is_media = any(k in message_data for k in ["photo", "video", "document", "audio"])
+
+            # 🔒 Атомарная проверка через SQLite (безопасно для многопроцессорности)
+            if media_group_id:
+                if self.db.is_album_processed(media_group_id):
+                    return  # Альбом уже обработан другим сообщением/воркером
+                if not self.db.mark_album_processed(media_group_id):
+                    return  # Не удалось захватить лок (race condition)
+
+                # Ленивая очистка старых записей (раз в 50 сообщений)
+                if not hasattr(self, "_album_cleanup_cnt"):
+                    self._album_cleanup_cnt = 0
+                self._album_cleanup_cnt += 1
+                if self._album_cleanup_cnt % 50 == 0:
+                    self.db.cleanup_old_albums()
+
+            # Сюда доходит ТОЛЬКО первое сообщение альбома
             self.set_message_reaction(chat_id, message_id)
-
-            is_media = any(key in message_data for key in ["photo", "video", "document", "audio"])
-
-            if is_media:
-                media_group_id = message_data.get("media_group_id")
-                if media_group_id:
-                    if not hasattr(self, "album_types"):
-                        self.album_types = {}
-
-                    has_caption = bool(message_data.get("caption"))
-                    album_type = self.album_types.get(media_group_id)
-
-                    if has_caption:
-                        self.album_types[media_group_id] = "with_caption"
-                        logger.info(f"Альбом с подписью: {media_group_id}")
-                    elif not has_caption and not album_type:
-                        self.album_types[media_group_id] = "without_caption"
-                        logger.info(f"Альбом без подписи: {media_group_id}")
-                    elif not has_caption and album_type:
-                        logger.info("Продолжение альбома, пропускаем")
-                        return
-
-            current_time = get_moscow_now()
-            if not hasattr(self, "album_timestamps"):
-                self.album_timestamps = {}
-
-            self.album_timestamps[media_group_id] = current_time
-
-            for mgid in list(self.album_types.keys()):
-                if mgid not in self.album_timestamps or (current_time - self.album_timestamps[mgid]) > 30:
-                    if mgid in self.album_types:
-                        del self.album_types[mgid]
-                    if mgid in self.album_timestamps:
-                        del self.album_timestamps[mgid]
-
             self.send_comment_to_message(chat_id, message_id, is_media)
-
             self.check_scheduled_comments(chat_id, message_id)
 
         except Exception as e:
@@ -240,13 +217,8 @@ class TelegramBot:
             return None
 
     def _get_different_comment(self, chat_id: int, comment_type: str, current_comment: str) -> str:
-        group_name = f"group_{abs(chat_id)}"
-        comments_data = self.comments_manager.comment_data.get(group_name, {})
-
-        if comment_type == "photo":
-            available = comments_data.get("photo", [])
-        else:
-            available = comments_data.get("text", [])
+        comments = self.comments_manager.get_comments_list(chat_id)
+        available = comments.get(comment_type, [])
 
         if len(available) <= 1:
             return current_comment
@@ -282,21 +254,14 @@ class TelegramBot:
     def check_scheduled_comments(self, chat_id: int, message_id: int) -> None:
         try:
 
-            today = get_moscow_datetime_str()
-            group_name = f"group_{abs(chat_id)}"
-
-            scheduled = self.comments_manager.comment_data.get(group_name, {}).get("scheduled", {})
-
-            if today in scheduled:
+            today = get_moscow_datetime_str().split(" ")[0]  # только дата "YYYY-MM-DD"
+            scheduled = self.comments_manager.get_scheduled_for_today(chat_id, today)
+            for comment in scheduled:
                 logger.info(f"Найдены запланированные комментарии на сегодня ({today})")
 
-                for comment in scheduled[today]:
+                comment = self.comments_manager.parse_comment_template(comment)
 
-                    comment = self.comments_manager.parse_comment_template(comment)
-
-                    self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
-
-                    time.sleep(0.5)
+                self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
 
         except Exception as e:
             logger.error(f"Ошибка проверки запланированных комментариев: {e}")

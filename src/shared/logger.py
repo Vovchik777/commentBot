@@ -40,6 +40,10 @@ def _init_logger(
     return logger
 
 
+def get_db_logger() -> logging.Logger:
+    return _init_logger("commentBot.db", "logs/db.log")
+
+
 def get_bot_logger() -> logging.Logger:
     return _init_logger("commentBot.bot", "logs/bot.log")
 

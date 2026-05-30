@@ -20,13 +20,9 @@ cfg.validate()
 
 def cleanup_task():
     try:
-        if os.path.exists(cfg.LOGGED_MSGS_FILE):
-            with open(cfg.LOGGED_MSGS_FILE, "r", encoding="utf-8") as f:
-                logged_msgs = json.load(f)
-        else:
-            logged_msgs = {}
 
-        keys_to_remove = MessageLogsManager(cfg.LOGGED_MSGS_FILE).cleanup_old_logs()
+        keys_to_remove = MessageLogsManager(cfg.DB_FILE).cleanup_old_logs()
+        logged_msgs = MessageLogsManager(cfg.DB_FILE).get_logged_messages()
 
         if keys_to_remove == -1:
             logger.error("keys_to_remove == -1")
