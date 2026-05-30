@@ -1,9 +1,11 @@
 import sqlite3
 import time
-from src.shared.logger import get_db_logger
+import threading
 from typing import Optional, List
-from .models import User, PermissionLevel
 from contextlib import closing
+
+from .models import User, PermissionLevel
+from src.shared.logger import get_db_logger
 
 logger = get_db_logger()
 
@@ -12,6 +14,7 @@ class DataBaseManager:
     def __init__(self, db_file: str):
         self.db_file = db_file
         self._init_db()
+        self._start_ttl_worker()
         logger.info(f"DatabaseManager инициализирован для файла: {db_file}")
 
     def _init_db(self) -> None:
@@ -54,10 +57,39 @@ class DataBaseManager:
             );
             CREATE TABLE IF NOT EXISTS processed_albums (
                 media_group_id TEXT PRIMARY KEY,
-                timestamp REAL NOT NULL
+                timestamp REAL NOT NULL,
+                expires_at REAL NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS bot_state (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                expires_at REAL NOT NULL
+            );
+            
+            CREATE INDEX IF NOT EXISTS idx_state_expire ON bot_state(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_albums_expire ON processed_albums(expires_at);
+            CREATE INDEX IF NOT EXISTS idx_comments_lookup ON comments(group_id, comment_type);
+            CREATE INDEX IF NOT EXISTS idx_comments_scheduled ON comments(group_id, scheduled_date);
+            CREATE INDEX IF NOT EXISTS idx_logs_lookup ON message_logs(original_message_id);
+            CREATE INDEX IF NOT EXISTS idx_logs_cleanup ON message_logs(timestamp);
             """)
             conn.commit()
+
+    def _start_ttl_worker(self) -> None:
+        def cleanup_task():
+            while True:
+                try:
+                    with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
+                        now = time.time()
+                        conn.execute("DELETE FROM bot_state WHERE expires_at < ?", (now,))
+                        conn.execute("DELETE FROM processed_albums WHERE expires_at < ?", (now,))
+                        conn.commit()
+                except Exception as e:
+                    logger.error(f"TTL Worker error: {e}")
+                time.sleep(60)
+
+        self.worker = threading.Thread(target=cleanup_task, daemon=True)
+        self.worker.start()
 
     def create_group_table(self, tg_group_id: int) -> None:
         with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
@@ -74,7 +106,7 @@ class DataBaseManager:
                 JOIN users_groups AS ug ON u.id = ug.user_id
                 JOIN groups AS g ON ug.group_id = g.id
                 WHERE u.tg_user_id = ? AND g.tg_group_id = ?
-            """,
+                """,
                 (tg_user_id, tg_group_id),
             ).fetchone()
             return User(tg_user_id=tg_user_id, username=result[0], permission=PermissionLevel(result[1]), tg_group_id=tg_group_id) if result else None
@@ -92,9 +124,6 @@ class DataBaseManager:
                 )
                 user_result = cursor.fetchone()
                 if not user_result:
-                    cursor.execute("SELECT id FROM users WHERE tg_user_id = ?", (user.tg_user_id,))
-                    user_result = cursor.fetchone()
-                if not user_result:
                     return False
                 user_id = user_result[0]
 
@@ -104,9 +133,6 @@ class DataBaseManager:
                 )
                 group_result = cursor.fetchone()
                 if not group_result:
-                    cursor.execute("SELECT id FROM groups WHERE tg_group_id = ?", (user.tg_group_id,))
-                    group_result = cursor.fetchone()
-                if not group_result:
                     return False
                 group_id = group_result[0]
 
@@ -115,7 +141,8 @@ class DataBaseManager:
                     return False
 
                 cursor.execute(
-                    "INSERT INTO users_groups (user_id, group_id, permission) VALUES (?, ?, ?)", (user_id, group_id, user.permission.value)
+                    "INSERT INTO users_groups (user_id, group_id, permission) VALUES (?, ?, ?)",
+                    (user_id, group_id, user.permission.value),
                 )
                 conn.commit()
                 return True
@@ -144,7 +171,7 @@ class DataBaseManager:
                     JOIN users_groups AS ug ON u.id = ug.user_id
                     JOIN groups AS g ON ug.group_id = g.id
                     WHERE u.username = ? AND g.tg_group_id = ?
-                """,
+                    """,
                     (username, tg_group_id),
                 ).fetchone()
                 return (
@@ -156,7 +183,7 @@ class DataBaseManager:
                     SELECT u.tg_user_id, u.username, g.tg_group_id, ug.permission FROM users AS u
                     JOIN users_groups AS ug ON u.id = ug.user_id
                     JOIN groups AS g ON ug.group_id = g.id WHERE u.username = ?
-                """,
+                    """,
                     (username,),
                 ).fetchall()
                 return (
@@ -180,7 +207,7 @@ class DataBaseManager:
                 SELECT u.tg_user_id, u.username, ug.permission FROM users AS u
                 JOIN users_groups AS ug ON u.id = ug.user_id
                 JOIN groups AS g ON ug.group_id = g.id WHERE g.tg_group_id = ?
-            """,
+                """,
                 (tg_group_id,),
             ).fetchall()
             return [User(tg_user_id=r[0], username=r[1], permission=PermissionLevel(r[2]), tg_group_id=tg_group_id) for r in results]
@@ -193,24 +220,43 @@ class DataBaseManager:
         except Exception as e:
             logger.error(f"Ошибка обновления имени: {e}")
 
+    # --- АЛЬБОМЫ ---
     def is_album_processed(self, media_group_id: str) -> bool:
-        """Проверяет, обрабатывался ли уже этот альбом."""
         with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
-            return conn.execute("SELECT 1 FROM processed_albums WHERE media_group_id=?", (media_group_id,)).fetchone() is not None
+            row = conn.execute(
+                "SELECT 1 FROM processed_albums WHERE media_group_id=? AND expires_at > ?",
+                (media_group_id, time.time()),
+            ).fetchone()
+            return row is not None
 
     def mark_album_processed(self, media_group_id: str) -> bool:
-        """Атомарно помечает альбом. Возвращает True только если вставка прошла (мы первые)."""
         try:
+            now = time.time()
+            expires_at = now + 300
             with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
-                conn.execute("INSERT OR IGNORE INTO processed_albums (media_group_id, timestamp) VALUES (?, ?)", (media_group_id, time.time()))
+                cursor = conn.execute(
+                    "INSERT OR IGNORE INTO processed_albums (media_group_id, timestamp, expires_at) VALUES (?, ?, ?)",
+                    (media_group_id, now, expires_at),
+                )
                 conn.commit()
-                return True
+                return cursor.rowcount > 0
         except Exception:
             return False
 
-    def cleanup_old_albums(self, max_age_sec: int = 300) -> None:
-        """Удаляет записи старше 5 минут, чтобы таблица не пухла."""
-        cutoff = time.time() - max_age_sec
+    # --- СОСТОЯНИЕ (PREV_COMMENT) ---
+    def get_last_comment(self, chat_id: int) -> Optional[str]:
         with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
-            conn.execute("DELETE FROM processed_albums WHERE timestamp < ?", (cutoff,))
+            row = conn.execute(
+                "SELECT value FROM bot_state WHERE key=? AND expires_at > ?",
+                (f"last_comment:{chat_id}", time.time()),
+            ).fetchone()
+            return row[0] if row else None
+
+    def set_last_comment(self, chat_id: int, text: str) -> None:
+        expires_at = time.time() + 3600  # TTL 1 час
+        with closing(sqlite3.connect(self.db_file, timeout=10)) as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO bot_state (key, value, expires_at) VALUES (?, ?, ?)",
+                (f"last_comment:{chat_id}", text, expires_at),
+            )
             conn.commit()

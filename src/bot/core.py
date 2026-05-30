@@ -1,5 +1,5 @@
-from datetime import time
 import re
+import time
 import threading
 from typing import Any, Dict, List, Optional
 
@@ -9,11 +9,9 @@ from src.config import Config
 from src.database.repository import DataBaseManager
 from src.bot.services.comments import CommentsManager
 from src.bot.services.message_logging import MessageLogsManager
-from src.shared.time_utils import get_moscow_datetime_str, get_moscow_now
+from src.shared.time_utils import get_moscow_datetime_str
 from .handlers.commands import MessageHandler
 from src.bot.utils.banwords import banwords
-import time
-
 from src.shared.logger import get_bot_logger
 
 logger = get_bot_logger()
@@ -29,8 +27,6 @@ class TelegramBot:
         self.lock = threading.Lock()
         self.handler = MessageHandler(self)
 
-        self.prev_comment = ""
-
         logger.info("TelegramBot инициализирован")
 
     def handle_forwarded_message(self, message_data: Dict[str, Any]) -> None:
@@ -40,21 +36,14 @@ class TelegramBot:
             media_group_id = message_data.get("media_group_id")
             is_media = any(k in message_data for k in ["photo", "video", "document", "audio"])
 
-            # 🔒 Атомарная проверка через SQLite (безопасно для многопроцессорности)
+            # 🔒 Атомарная проверка альбома через SQLite
             if media_group_id:
                 if self.db.is_album_processed(media_group_id):
-                    return  # Альбом уже обработан другим сообщением/воркером
+                    return
                 if not self.db.mark_album_processed(media_group_id):
-                    return  # Не удалось захватить лок (race condition)
+                    return
 
-                # Ленивая очистка старых записей (раз в 50 сообщений)
-                if not hasattr(self, "_album_cleanup_cnt"):
-                    self._album_cleanup_cnt = 0
-                self._album_cleanup_cnt += 1
-                if self._album_cleanup_cnt % 50 == 0:
-                    self.db.cleanup_old_albums()
-
-            # Сюда доходит ТОЛЬКО первое сообщение альбома
+            # Сюда доходит ТОЛЬКО первое сообщение альбома (или одиночное)
             self.set_message_reaction(chat_id, message_id)
             self.send_comment_to_message(chat_id, message_id, is_media)
             self.check_scheduled_comments(chat_id, message_id)
@@ -71,7 +60,6 @@ class TelegramBot:
         parse_mode: str = "HTML",
     ) -> Optional[Dict]:
         MAX_LENGHT = 4096
-
         if len(text) <= MAX_LENGHT:
             return self._send_single_message(chat_id, text, reply_to_message_id, reply_markup, parse_mode)
         else:
@@ -97,7 +85,6 @@ class TelegramBot:
             response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
             result = response.json()
-
             if result.get("ok"):
                 logger.info(f"Сообщение отправлено в чат {chat_id}: {text}...")
             else:
@@ -128,21 +115,15 @@ class TelegramBot:
                 if current_part:
                     parts.append(current_part.strip())
                 current_part = line + "\n"
-
         if current_part:
             parts.append(current_part.strip())
 
         results = []
         for i, part in enumerate(parts):
-            logger.info(f"Отправка части {i+1}/{len(parts)} ({len(part)} символов)")
-
             result = self._send_single_message(chat_id, part, reply_to_message_id, None, parse_mode)
-
             results.append(result)
-
             if i < len(parts) - 1:
                 time.sleep(0.3)
-
         return results
 
     def set_message_reaction(self, chat_id: int, message_id: int, emoji: str = "🗿") -> Dict:
@@ -155,7 +136,6 @@ class TelegramBot:
 
         try:
             response = requests.post(url, json=payload, timeout=10)
-
             if response.status_code == 429:
                 retry_after = response.json().get("parameters", {}).get("retry_after", 5)
                 logger.warning(f"Rate limit exceeded. Waiting {retry_after} seconds.")
@@ -164,12 +144,8 @@ class TelegramBot:
 
             response.raise_for_status()
             result = response.json()
-
             if result.get("ok"):
                 logger.info(f"Реакция установлена на сообщение {message_id} в чате {chat_id}")
-            else:
-                logger.warning(f"Не удалось установить реакцию: {result}")
-
             return result
         except requests.exceptions.RequestException as e:
             logger.error(f"Ошибка установки реакции: {e}")
@@ -177,18 +153,11 @@ class TelegramBot:
 
     def get_chat_info(self, chat_id: int) -> Dict[str, Any]:
         url = f"{self.base_url}/getChat"
-        payload = {"chat_id": chat_id}
-
         try:
-            response = requests.post(url, json=payload, timeout=10)
+            response = requests.post(url, json={"chat_id": chat_id}, timeout=10)
             response.raise_for_status()
             result = response.json()
-
-            if result.get("ok"):
-                return result.get("result", {})
-            else:
-                logger.error(f"Ошибка получения информации о чате {chat_id}: {result}")
-                return {}
+            return result.get("result", {}) if result.get("ok") else {}
         except requests.exceptions.RequestException as e:
             logger.error(f"Ошибка запроса getChat для {chat_id}: {e}")
             return {}
@@ -200,18 +169,23 @@ class TelegramBot:
         try:
             comment_type = "photo" if is_media else "text"
 
+            # 1. Берём последний комментарий из БД (общий для всех воркеров)
+            last_comment = self.db.get_last_comment(chat_id)
+
+            # 2. Генерируем новый
             comment = self.comments_manager.get_random_comment(chat_id, comment_type)
 
-            if comment == self.prev_comment:
+            # 3. Если совпал с предыдущим — подбираем другой
+            if comment == last_comment:
                 comment = self._get_different_comment(chat_id, comment_type, comment)
 
             comment = self.comments_manager.parse_comment_template(comment)
 
-            self.prev_comment = comment
+            # 4. Сохраняем в БД (TTL 1 час)
+            self.db.set_last_comment(chat_id, comment)
 
             logger.info(f"Отправка комментария в чат {chat_id}: {comment}")
-            result = self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
-            return result
+            return self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None
@@ -219,25 +193,20 @@ class TelegramBot:
     def _get_different_comment(self, chat_id: int, comment_type: str, current_comment: str) -> str:
         comments = self.comments_manager.get_comments_list(chat_id)
         available = comments.get(comment_type, [])
-
         if len(available) <= 1:
             return current_comment
 
         attempts = 0
         max_attempts = min(10, len(available) * 2)
-
         while attempts < max_attempts:
             new_comment = self.comments_manager.get_random_comment(chat_id, comment_type)
             if new_comment != current_comment:
                 return new_comment
             attempts += 1
-
         return current_comment
 
     def process_update(self, update: Dict[str, Any]) -> None:
-
         logger.info(f"Получено обновление: {list(update.keys())}")
-
         try:
             if "message" in update:
                 self.handler.process_message(update["message"])
@@ -247,22 +216,17 @@ class TelegramBot:
                 logger.info("Получен callback query")
             else:
                 logger.info(f"Обновление другого типа: {list(update.keys())}")
-
         except Exception as e:
             logger.error(f"Ошибка обработки обновления: {e}", exc_info=True)
 
     def check_scheduled_comments(self, chat_id: int, message_id: int) -> None:
         try:
-
-            today = get_moscow_datetime_str().split(" ")[0]  # только дата "YYYY-MM-DD"
+            today = get_moscow_datetime_str().split(" ")[0]
             scheduled = self.comments_manager.get_scheduled_for_today(chat_id, today)
             for comment in scheduled:
                 logger.info(f"Найдены запланированные комментарии на сегодня ({today})")
-
                 comment = self.comments_manager.parse_comment_template(comment)
-
                 self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
-
         except Exception as e:
             logger.error(f"Ошибка проверки запланированных комментариев: {e}")
 
@@ -274,33 +238,11 @@ class TelegramBot:
             if re.search(key, text, re.IGNORECASE):
                 self.send_message(chat_id, banwords.get(key, "нельзя"), reply_to_message_id=message_id)
 
-    def cleanup_processed_media_groups(self, max_age_seconds: int = 300) -> None:
-        current_time = time.time()
-        expired_keys = []
-
-        for media_group_id, timestamp in self.processed_media_groups.items():
-            if current_time - timestamp > max_age_seconds:
-                expired_keys.append(media_group_id)
-
-        for key in expired_keys:
-            del self.processed_media_groups[key]
-
-        for key in list(self.album_types.keys()):
-            if key not in self.processed_media_groups:
-                del self.album_types[key]
-                if key in self.album_timestamps:
-                    del self.album_timestamps[key]
-
     def close(self) -> None:
         logger.info("Закрытие TelegramBot")
-
-        if hasattr(self, "db"):
-            self.db.close()
-
-        logger.info("TelegramBot закрыт")
 
     def __del__(self):
         try:
             self.close()
-        except:
+        except Exception:
             pass
