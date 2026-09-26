@@ -36,10 +36,10 @@ class PermissionLevel(IntEnum):
 
 @dataclass
 class User:
-    tg_group_id: Optional[int]
+    tg_group_id: int
     tg_user_id: int
-    username: Optional[str]
-    permission: Optional[PermissionLevel] = PermissionLevel.BASE
+    username: str
+    permission: PermissionLevel = PermissionLevel.BASE
 
     # @property
     # def table_name(self) -> str:

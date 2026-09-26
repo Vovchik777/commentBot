@@ -119,25 +119,28 @@ class DataBaseManager:
                 cursor = conn.cursor()
 
                 cursor.execute(
-                    "INSERT INTO users (username, tg_user_id) VALUES (?,?) ON CONFLICT(tg_user_id) DO UPDATE SET username = excluded.username RETURNING id",
+                    "INSERT INTO users (username, tg_user_id) VALUES (?, ?) "
+                    "ON CONFLICT(tg_user_id) DO UPDATE SET username = excluded.username "
+                    "RETURNING id",
                     (user.username, user.tg_user_id),
                 )
-                user_result = cursor.fetchone()
-                if not user_result:
-                    return False
-                user_id = user_result[0]
+                user_id = cursor.fetchone()[0]
 
                 cursor.execute(
-                    "INSERT INTO groups (tg_group_id) VALUES (?) ON CONFLICT(tg_group_id) DO UPDATE SET tg_group_id = excluded.tg_group_id RETURNING id",
+                    "INSERT INTO groups (tg_group_id) VALUES (?) "
+                    "ON CONFLICT(tg_group_id) DO UPDATE SET tg_group_id = excluded.tg_group_id "
+                    "RETURNING id",
                     (user.tg_group_id,),
                 )
-                group_result = cursor.fetchone()
-                if not group_result:
-                    return False
-                group_id = group_result[0]
+                group_id = cursor.fetchone()[0]
 
-                existing = cursor.execute("SELECT 1 FROM users_groups WHERE user_id=? AND group_id=?", (user_id, group_id)).fetchone()
+                existing = cursor.execute(
+                    "SELECT 1 FROM users_groups WHERE user_id=? AND group_id=?",
+                    (user_id, group_id),
+                ).fetchone()
+
                 if existing:
+                    conn.commit()
                     return False
 
                 cursor.execute(

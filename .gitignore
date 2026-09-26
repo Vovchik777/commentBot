@@ -13,3 +13,7 @@ project_bundle.md
 _experiments/
 scripts/
 .idea/
+.vscode/
+.pytest_cache/
+pytest.ini
+__pycache__/
