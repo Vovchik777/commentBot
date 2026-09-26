@@ -10,3 +10,6 @@ logs/
 test.py
 temp.py
 project_bundle.md
+_experiments/
+scripts/
+.idea/
