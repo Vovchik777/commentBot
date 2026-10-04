@@ -9,7 +9,7 @@ from src.shared.logger import get_bot_logger
 logger = get_bot_logger()
 
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder="web/templates")
 
 
 config = Config()
