@@ -12,17 +12,13 @@ def required_permission(permission_level: PermissionLevel) -> Callable:
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(self, message_data, *args, **kwargs) -> Any:
-
             chat_data = message_data.get("chat") or {}
             from_data = message_data.get("from") or {}
             chat_id = int(chat_data.get("id", 0))
             user_id = int(from_data.get("id", 0))
 
             try:
-                if not isinstance(message_data, dict):
-                    logger.error(f"Invalid message_data type: {type(message_data)}")
-                    return self._send_permission_error(chat_id, message_data, ValueError("Invalid message_data type"))
-
+                
                 if not chat_id or not user_id:
                     logger.error(f"🚫 Некорректные ID: chat={chat_id}, user={user_id}")
                     return
