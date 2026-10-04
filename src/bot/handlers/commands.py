@@ -1,8 +1,7 @@
 import time
 from typing import Dict, Any
 
-from src.database.models import PermissionLevel, User
-from src.bot.utils.banwords import banwords
+from src.database.models import PermissionLevel, User, CommentTypes, Comment
 from src.bot.utils.permissions import required_permission
 
 from src.shared.logger import get_bot_logger
@@ -20,7 +19,6 @@ class MessageHandler:
             "/admin_msg": self.handle_admin_msg,
             "/answer": self.handle_answer,
             "/get_user_info": self.handle_get_user_info,
-            "/get_banwords": self.handle_get_banwords,
         }
 
         self.group_commands = {
@@ -79,7 +77,7 @@ class MessageHandler:
             self.bot.check_banwords(message_data)
 
             if text == "/start":
-                self.handle_start(chat_id, chat_type)
+                self.handle_start(message_data)
                 return
 
             if chat_type in ["group", "supergroup"]:
@@ -92,7 +90,9 @@ class MessageHandler:
             logger.error(f"Ошибка обработки сообщения: {e}")
 
     @required_permission(PermissionLevel.BASE)
-    def handle_start(self, chat_id: int, chat_type: str) -> None:
+    def handle_start(self, message_data: Dict[str, Any]) -> None:
+        chat_id = message_data["chat"]["id"]
+        chat_type = message_data["chat"].get("type", "")
         if chat_type == "private":
             self.bot.send_message(
                 chat_id,
@@ -103,19 +103,20 @@ class MessageHandler:
                 chat_id,
                 "чтобы зарегистрироваться напиши /register",
             )
+            
 
     @required_permission(PermissionLevel.BASE)
     def handle_get_banwords(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
+        banwords = self.bot.comments_manager.get_banwords_list(chat_id)
         msg = ""
-        for word, reply in banwords.items():
-            msg += f"<b>{word}</b> - {reply}\n"
+        for banword in banwords:
+            msg += f"<b>{banword.pattern}</b> - {banword.reply}\n"
 
-        (
+        if msg:
             self.bot.send_message(chat_id, msg, reply_to_message_id=message_data["message_id"])
-            if msg
-            else self.bot.send_message(chat_id, "нет банвордов")
-        )
+        else:
+            self.bot.send_message(chat_id, "нет банвордов")
 
     def handle_private_message(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
@@ -417,42 +418,49 @@ class MessageHandler:
     def handle_list_comment(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
         group_comments = self.bot.comments_manager.get_comments_list(chat_id)
-        if not group_comments["text"] and not group_comments["photo"] and not group_comments["scheduled"]:
+        if (
+            not group_comments[CommentTypes.TEXT.value]
+            and not group_comments[CommentTypes.PHOTO.value]
+            and not group_comments[CommentTypes.SCHEDULED.value]
+        ):
             self.bot.send_message(chat_id, "Для этой группы еще нет комментариев", reply_to_message_id=message_data.get("message_id"))
             return
 
         msg_lines = []
         num = 1
 
-        text_comments = group_comments.get("text", [])
+        text_comments = group_comments.get(CommentTypes.TEXT.value, [])
         if text_comments:
             msg_lines.append("ТЕКСТОВЫЕ".center(50, "="))
             for comment in text_comments:
-                parsed = self.bot.comments_manager.parse_comment_template(comment)
-                if parsed != comment:
-                    msg_lines.append(f"{num}. {comment} ( {parsed} )")
+                raw = comment.comment_text
+                parsed = self.bot.comments_manager.parse_comment_template(raw)
+                if parsed != raw:
+                    msg_lines.append(f"{num}. {raw} ( {parsed} )")
                 else:
-                    msg_lines.append(f"{num}. {comment}")
+                    msg_lines.append(f"{num}. {raw}")
                 num += 1
         num = 1
-        photo_comments = group_comments.get("photo", [])
+        photo_comments = group_comments.get(CommentTypes.PHOTO.value, [])
         if photo_comments:
             msg_lines.append("ФОТО".center(50, "="))
             for comment in photo_comments:
-                parsed = self.bot.comments_manager.parse_comment_template(comment)
-                if parsed != comment:
-                    msg_lines.append(f"{num}. {comment} ( {parsed} )")
+                raw = comment.comment_text
+                parsed = self.bot.comments_manager.parse_comment_template(raw)
+                if parsed != raw:
+                    msg_lines.append(f"{num}. {raw} ( {parsed} )")
                 else:
-                    msg_lines.append(f"{num}. {comment}")
+                    msg_lines.append(f"{num}. {raw}")
                 num += 1
         num = 1
-        scheduled_comments = group_comments.get("scheduled", {})
+        scheduled_comments = group_comments.get(CommentTypes.SCHEDULED.value, {})
         if scheduled_comments:
             msg_lines.append("ЗАПЛАНИРОВАННЫЕ".center(50, "="))
+
             for date, comments in scheduled_comments.items():
                 msg_lines.append(f"{date}".center(30, "-"))
                 for comment in comments:
-                    msg_lines.append(f"  {num}. {comment}")
+                    msg_lines.append(f"  {num}. {comment.comment_text}")
                     num += 1
 
         if msg_lines:
@@ -483,10 +491,10 @@ class MessageHandler:
             )
             return
 
-        comment_type = parts[1]
+        comment_type = CommentTypes.from_str(parts[1])
         comment_text = " ".join(parts[2:])
 
-        if comment_type not in ["text", "photo"]:
+        if comment_type not in [CommentTypes.TEXT, CommentTypes.PHOTO]:
             self.bot.send_message(
                 chat_id,
                 "Неверный тип комментария",
@@ -494,12 +502,12 @@ class MessageHandler:
             )
             return
 
-        success = self.bot.comments_manager.add_comment(comment_type, comment_text, chat_id)
+        success = self.bot.comments_manager.add_comment(Comment(group_id=chat_id, comment_type=comment_type, comment_text=comment_text))
 
         if success:
             self.bot.send_message(
                 chat_id,
-                f"Добавлен {comment_type}-комментарий: {comment_text}",
+                f"Добавлен {comment_type.value}-комментарий: {comment_text}",
                 reply_to_message_id=msg_id,
             )
         else:
@@ -521,7 +529,14 @@ class MessageHandler:
             )
             return
 
-        comment_type = parts[1]
+        comment_type = CommentTypes.from_str(parts[1])
+        if not comment_type:
+            self.bot.send_message(
+                chat_id,
+                "Неверный тип комментария",
+                reply_to_message_id=msg_id,
+            )
+            return
         index_str = parts[2]
 
         if not index_str.isdigit():
@@ -535,13 +550,13 @@ class MessageHandler:
         if deleted_comment:
             self.bot.send_message(
                 chat_id,
-                f"Комментарий №{index} ({deleted_comment}) удален",
+                f"Комментарий №{index} ({deleted_comment.comment_text}) удален",
                 reply_to_message_id=msg_id,
             )
         else:
             self.bot.send_message(
                 chat_id,
-                f"{comment_type} Комментарий №{index} не найден",
+                f"{comment_type.value} Комментарий №{index} не найден",
                 reply_to_message_id=msg_id,
             )
 
@@ -637,9 +652,17 @@ class MessageHandler:
             return
 
         date = parts[1]
+        
+        if not Comment.parse_scheduled_date(date):
+            self.bot.send_message(
+                            chat_id,
+                            "Дата должна быть строго в формате ГГГГ-ММ-ДД и не раньше текущего дня",
+                            reply_to_message_id=msg_id,
+                        )
+            return 
         comment_text = " ".join(parts[2:])
 
-        success = self.bot.comments_manager.add_scheduled_comment(comment_text, chat_id, date)
+        success = self.bot.comments_manager.add_comment(Comment(chat_id, CommentTypes.SCHEDULED, comment_text, date))
 
         if success:
             self.bot.send_message(

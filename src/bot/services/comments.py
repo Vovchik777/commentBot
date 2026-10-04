@@ -1,18 +1,21 @@
-import sqlite3
-import random
 import re
-from src.shared.logger import get_db_logger
-from typing import Optional, Dict, Any
+import time
+from typing import Optional, Dict, Any, List, Set, Tuple
+
 from faker import Faker
-import logging
-from contextlib import closing
+
+from src.config import Config
+from src.database.models import Banword, Comment, CommentTypes
+from src.database.repository import DataBaseManager
+from src.shared.logger import get_db_logger
 
 logger = get_db_logger()
+config = Config()
 
 
 class CommentsManager:
-    def __init__(self, db_file: str):
-        self.db_file = db_file
+    def __init__(self, db: DataBaseManager):
+        self.db = db
         self.faker = Faker("ru_RU")
         self.faker_replace = {
             "name": lambda: self.faker.name(),
@@ -20,82 +23,91 @@ class CommentsManager:
             "phone_number": lambda: self.faker.phone_number(),
             "company": lambda: self.faker.company(),
         }
-
-    def _conn(self):
-        return sqlite3.connect(self.db_file, timeout=10)
+        self._bad_patterns: Set[str] = set()
+        self._last_comments: Dict[int, str] = {}
+        self._banwords_ram: Dict[int, Tuple[float, List[Banword]]] = {}
 
     def init_group_comments(self, group_id: int) -> None:
         logger.info(f"Группа {group_id} готова к работе с комментариями (SQLite)")
 
-    def add_comment(self, comment_type: str, text: str, group_id: int) -> bool:
-        try:
-            with closing(self._conn()) as conn:
-                conn.execute("INSERT OR IGNORE INTO comments (group_id, comment_type, comment_text) VALUES (?, ?, ?)", (group_id, comment_type, text))
-                conn.commit()
-                return True
-        except Exception as e:
-            logger.error(f"Ошибка добавления комментария: {e}")
-            return False
+    def add_comment(self, comment: Comment) -> bool:
+        return self.db.add_comment(comment)
 
-    def add_scheduled_comment(self, text: str, group_id: int, date: str) -> bool:
-        try:
-            with closing(self._conn()) as conn:
-                conn.execute(
-                    "INSERT OR IGNORE INTO comments (group_id, comment_type, comment_text, scheduled_date) VALUES (?, 'scheduled', ?, ?)",
-                    (group_id, text, date),
-                )
-                conn.commit()
-                return True
-        except Exception as e:
-            logger.error(f"Ошибка добавления запланированного: {e}")
-            return False
+    def delete_comment(self, group_id: int, comment_type: CommentTypes, index: int) -> Optional[Comment]:
+        return self.db.delete_comment(group_id, comment_type, index)
 
-    def delete_comment(self, group_id: int, comment_type: str, index: int) -> Optional[str]:
-        with closing(self._conn()) as conn:
-            if comment_type == "scheduled":
-                cursor = conn.execute(
-                    "SELECT id, comment_text FROM comments WHERE group_id=? AND comment_type='scheduled' ORDER BY scheduled_date, id LIMIT 1 OFFSET ?",
-                    (group_id, index - 1),
-                )
-            else:
-                cursor = conn.execute(
-                    "SELECT id, comment_text FROM comments WHERE group_id=? AND comment_type=? LIMIT 1 OFFSET ?", (group_id, comment_type, index - 1)
-                )
-            row = cursor.fetchone()
-            if row:
-                conn.execute("DELETE FROM comments WHERE id=?", (row[0],))
-                conn.commit()
-                return row[1]
-            return None
+    def get_random_comment(self, group_id: int, comment_type: CommentTypes) -> Optional[Comment]:
+        return self.db.get_random_comment(group_id, comment_type)
 
-    def get_random_comment(self, group_id: int, comment_type: str) -> Optional[str]:
-        with closing(self._conn()) as conn:
-            row = conn.execute(
-                "SELECT comment_text FROM comments WHERE group_id=? AND comment_type=? ORDER BY RANDOM() LIMIT 1", (group_id, comment_type)
-            ).fetchone()
-            return row[0] if row else None
-
-    def get_scheduled_for_today(self, group_id: int, today_str: str) -> list[str]:
-        with closing(self._conn()) as conn:
-            rows = conn.execute(
-                "SELECT comment_text FROM comments WHERE group_id=? AND comment_type='scheduled' AND scheduled_date=?", (group_id, today_str)
-            ).fetchall()
-            return [r[0] for r in rows]
+    def get_scheduled_for_today(self, group_id: int, today_str: str) -> List[Comment]:
+        return self.db.get_scheduled_for_today(group_id, today_str)
 
     def get_comments_list(self, group_id: int) -> Dict[str, Any]:
-        result = {"text": [], "photo": [], "scheduled": {}}
-        with closing(self._conn()) as conn:
-            for row in conn.execute("SELECT comment_type, comment_text, scheduled_date FROM comments WHERE group_id=?", (group_id,)):
-                if row[0] == "scheduled":
-                    result["scheduled"].setdefault(row[2], []).append(row[1])
-                else:
-                    result[row[0]].append(row[1])
-        return result
+        return self.db.get_comments_list(group_id)
 
-    def parse_comment_template(self, comment: str) -> str:
-        templates = re.findall(r"{{\w+}}", comment)
+    def get_last_comment(self, chat_id: int) -> Optional[str]:
+        cached = self._last_comments.get(chat_id)
+        if cached is not None:
+            return cached
+
+        stored = self.db.get_last_comment(chat_id)
+        if stored is not None:
+            self._last_comments[chat_id] = stored
+        return stored
+
+    def set_last_comment(self, chat_id: int, text: str) -> None:
+        self._last_comments[chat_id] = text
+        self.db.set_last_comment(chat_id, text)
+
+    def get_banwords_list(self, group_id: int) -> List[Banword]:
+        return self.db.get_banwords_list(group_id)
+
+    def _get_banwords_cached(self, group_id: int) -> List[Banword]:
+        now = time.time()
+        ram = self._banwords_ram.get(group_id)
+        if ram is not None and ram[0] > now:
+            return ram[1]
+
+        cached = self.db.get_banwords_cache(group_id)
+        if cached is not None:
+            banwords, expires_at = cached
+        else:
+            banwords = self.get_banwords_list(group_id)
+            expires_at = self.db.set_banwords_cache(group_id, banwords, config.TTL_BANWORDS)
+
+        self._banwords_ram[group_id] = (expires_at, banwords)
+        return banwords
+
+    def add_banword(self, group_id: int, pattern: str, reply: str) -> bool:
+        try:
+            re.compile(pattern)
+        except re.error as e:
+            logger.warning(f"Паттерн отклонён, не компилируется: {e}")
+            return False
+
+        added = self.db.add_banword(group_id, pattern, reply)
+        if added:
+            self.db.invalidate_banwords_cache(group_id)
+            self._banwords_ram.pop(group_id, None)
+        return added
+
+    def get_valid_banwords(self, group_id: int) -> List[Banword]:
+        valid = []
+        for banword in self._get_banwords_cached(group_id):
+            if banword.pattern in self._bad_patterns:
+                continue
+            try:
+                re.compile(banword.pattern)
+                valid.append(banword)
+            except re.error as e:
+                logger.warning(f"Банворд {banword} пропущен, паттерн не компилируется: {e}")
+                self._bad_patterns.add(banword.pattern)
+        return valid
+
+    def parse_comment_template(self, comment_text: str) -> str:
+        templates = re.findall(r"{{\w+}}", comment_text)
         for template in templates:
             key = template.strip("{}")
             if key in self.faker_replace:
-                comment = comment.replace(template, self.faker_replace[key]())
-        return comment
+                comment_text = comment_text.replace(template, self.faker_replace[key]())
+        return comment_text

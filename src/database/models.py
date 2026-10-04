@@ -1,7 +1,10 @@
 from __future__ import annotations
 from dataclasses import dataclass
-from enum import IntEnum
+from datetime import datetime
+from enum import Enum, IntEnum
 from typing import Optional
+
+from src.shared.time_utils import get_moscow_date
 
 
 class PermissionLevel(IntEnum):
@@ -34,6 +37,21 @@ class PermissionLevel(IntEnum):
         return names.get(self, "потом узнаем")
 
 
+class CommentTypes(str, Enum):
+    TEXT = "text"
+    PHOTO = "photo"
+    SCHEDULED = "scheduled"
+
+    @classmethod
+    def from_str(cls, value: str) -> "CommentTypes | None":
+        if not isinstance(value, str):
+            return None
+        try:
+            return cls(value.lower().strip())
+        except ValueError:
+            return None
+
+
 @dataclass
 class User:
     tg_group_id: int
@@ -53,3 +71,38 @@ class LogMessage:
     message_id: int
     text: str
     timestamp: float
+
+
+@dataclass
+class Comment:
+    group_id: int
+    comment_type: CommentTypes
+    comment_text: str
+    scheduled_date: Optional[str] = None
+    use_count: int = 0
+
+    def __post_init__(self):
+        if isinstance(self.comment_type, CommentTypes):
+            return
+        parsed = CommentTypes.from_str(self.comment_type)
+        if parsed is None:
+            raise ValueError(f"Неизвестный тип комментария: {self.comment_type!r}")
+        self.comment_type = parsed
+
+    @staticmethod
+    def parse_scheduled_date(raw: str) -> Optional[str]:
+        try:
+            parsed = datetime.strptime(raw, "%Y-%m-%d")
+        except ValueError:
+            return None
+        if parsed.strftime("%Y-%m-%d") != raw:
+            return None
+        if raw < get_moscow_date():
+            return None
+        return raw
+    
+@dataclass
+class Banword:
+    group_id: int
+    pattern: str
+    reply: str

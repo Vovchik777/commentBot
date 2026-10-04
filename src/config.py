@@ -16,11 +16,16 @@ class Config:
     BASE_URL: str = os.getenv("BASE_URL", "https://alicerasp.alwaysdata.net/tgbot")
 
     DB_FILE: str = os.getenv("DB_FILE", "storage/users.db")
+    DB_CONNECTION_TIMEOUT: int = 10
 
     IGNORING_CHAT_IDS: List[str] = field(default_factory=list)
 
     ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
     ADMIN_PASS: str = os.getenv("ADMIN_PASS", "secure_pass")
+
+
+    TTL_ALBUM_PROCESSED : int = 3600
+    TTL_BANWORDS: int = 300
 
     def __post_init__(self):
         ignor_chat_ids = os.getenv("IGNORING_CHAT_IDS", "")

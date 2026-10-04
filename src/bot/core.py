@@ -6,12 +6,12 @@ from typing import Any, Dict, List, Optional
 import requests
 
 from src.config import Config
+from src.database.models import Comment, CommentTypes
 from src.database.repository import DataBaseManager
 from src.bot.services.comments import CommentsManager
 from src.bot.services.message_logging import MessageLogsManager
 from src.shared.time_utils import get_moscow_datetime_str
 from .handlers.commands import MessageHandler
-from src.bot.utils.banwords import banwords
 from src.shared.logger import get_bot_logger
 
 logger = get_bot_logger()
@@ -22,7 +22,7 @@ class TelegramBot:
         self.config = config
         self.base_url = f"https://api.telegram.org/bot{config.BOT_TOKEN}"
         self.db = DataBaseManager(config.DB_FILE)
-        self.comments_manager = CommentsManager(config.DB_FILE)
+        self.comments_manager = CommentsManager(self.db)
         self.logs_manager = MessageLogsManager(config.DB_FILE)
         self.lock = threading.Lock()
         self.handler = MessageHandler(self)
@@ -167,30 +167,29 @@ class TelegramBot:
 
     def send_comment_to_message(self, chat_id: int, message_id: int, is_media: bool = False) -> Optional[Dict]:
         try:
-            comment_type = "photo" if is_media else "text"
+            comment_type = CommentTypes.PHOTO if is_media else CommentTypes.TEXT
 
-            # 1. Берём последний комментарий из БД (общий для всех воркеров)
-            last_comment = self.db.get_last_comment(chat_id)
+            last_comment_text = self.comments_manager.get_last_comment(chat_id)
 
-            # 2. Генерируем новый
             comment = self.comments_manager.get_random_comment(chat_id, comment_type)
+            if not comment:
+                logger.warning(f"в чате {chat_id} нет комментариев типа {comment_type}")
+                return None
 
-            # 3. Если совпал с предыдущим — подбираем другой
-            if comment == last_comment:
+            if comment.comment_text == last_comment_text:
                 comment = self._get_different_comment(chat_id, comment_type, comment)
 
-            comment = self.comments_manager.parse_comment_template(comment)
+            self.comments_manager.set_last_comment(chat_id, comment.comment_text)
 
-            # 4. Сохраняем в БД (TTL 1 час)
-            self.db.set_last_comment(chat_id, comment)
+            text = self.comments_manager.parse_comment_template(comment.comment_text)
 
-            logger.info(f"Отправка комментария в чат {chat_id}: {comment}")
-            return self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
+            logger.info(f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}")
+            return self.send_message(chat_id=chat_id, text=text, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None
 
-    def _get_different_comment(self, chat_id: int, comment_type: str, current_comment: str) -> str:
+    def _get_different_comment(self, chat_id: int, comment_type: CommentTypes, current_comment: Comment) -> Comment:
         comments = self.comments_manager.get_comments_list(chat_id)
         available = comments.get(comment_type, [])
         if len(available) <= 1:
@@ -200,7 +199,7 @@ class TelegramBot:
         max_attempts = min(10, len(available) * 2)
         while attempts < max_attempts:
             new_comment = self.comments_manager.get_random_comment(chat_id, comment_type)
-            if new_comment != current_comment:
+            if new_comment and new_comment != current_comment:
                 return new_comment
             attempts += 1
         return current_comment
@@ -225,18 +224,22 @@ class TelegramBot:
             scheduled = self.comments_manager.get_scheduled_for_today(chat_id, today)
             for comment in scheduled:
                 logger.info(f"Найдены запланированные комментарии на сегодня ({today})")
-                comment = self.comments_manager.parse_comment_template(comment)
-                self.send_message(chat_id=chat_id, text=comment, reply_to_message_id=message_id)
+                text = self.comments_manager.parse_comment_template(comment.comment_text)
+                self.send_message(chat_id=chat_id, text=text, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"Ошибка проверки запланированных комментариев: {e}")
 
-    def check_banwords(self, message_data: dict) -> bool:
+    def check_banwords(self, message_data: dict) -> None:
         chat_id = message_data["chat"]["id"]
-        text = message_data.get("text", "").lower()
+        text = message_data.get("text", "")
         message_id = message_data["message_id"]
-        for key in banwords.keys():
-            if re.search(key, text, re.IGNORECASE):
-                self.send_message(chat_id, banwords.get(key, "нельзя"), reply_to_message_id=message_id)
+        for banword in self.comments_manager.get_valid_banwords(chat_id):
+            if re.search(banword.pattern, text, re.IGNORECASE):
+                self.send_message(
+                    chat_id,
+                    banword.reply if banword.reply else "тут должно было что-то быть",
+                    reply_to_message_id=message_id,
+                )
 
     def close(self) -> None:
         logger.info("Закрытие TelegramBot")
