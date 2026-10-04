@@ -10,8 +10,11 @@ logs/
 test.py
 temp.py
 project_bundle.md
+AGENTS.md
+export_session.bat
 _experiments/
 scripts/
+storage/
 .idea/
 .vscode/
 .pytest_cache/
