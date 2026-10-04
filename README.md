@@ -19,10 +19,9 @@
 ## Быстрый старт
 
 ```bash
-git clone https://github.com/твой-ник/commentBot.git
+git clone https://github.com/Vovchik777/commentBot.git
 cd commentBot
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env  # Заполни токены и URL
 python app.py
 ```
