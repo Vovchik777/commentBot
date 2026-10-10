@@ -6,7 +6,9 @@ import threading
 from typing import Any, Dict, Optional, List, Tuple
 from contextlib import closing
 from src.config import Config
+from src.shared.time_utils import get_moscow_date
 from .models import Banword, Comment, CommentTypes, User, PermissionLevel
+from .migrations import apply_migrations
 from src.shared.logger import get_db_logger
 
 logger = get_db_logger()
@@ -93,6 +95,7 @@ class DataBaseManager:
             CREATE INDEX IF NOT EXISTS idx_banwords_cache_expire ON banwords_cache(expires_at);
             """)
             conn.commit()
+            apply_migrations(conn)
 
     def _start_ttl_worker(self) -> None:
         def cleanup_task():
@@ -102,6 +105,11 @@ class DataBaseManager:
                         now = time.time()
                         conn.execute("DELETE FROM processed_albums WHERE expires_at < ?", (now,))
                         conn.execute("DELETE FROM banwords_cache WHERE expires_at < ?", (now,))
+                        conn.execute(
+                            """DELETE FROM comments WHERE comment_type = 'scheduled' AND scheduled_date < ?""",
+                            (get_moscow_date(),),
+                        )
+
                         conn.commit()
                 except Exception as e:
                     logger.error(f"TTL Worker error: {e}")
