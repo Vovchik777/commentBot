@@ -1,3 +1,6 @@
+
+![CI/CD Status](https://github.com/Vovchik777/commentBot/actions/workflows/deploy.yml/badge.svg)
+
 # Telegram Comment Bot
 
 Автоматизатор комментариев для Telegram-каналов и групп. Мониторит новые публикации, отправляет заранее подготовленные шаблоны, поддерживает расписание, многоуровневую систему прав и автоматическое логирование.
