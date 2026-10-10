@@ -1,10 +1,12 @@
 import sqlite3
+from datetime import date, timedelta
 
 import pytest
 
 from src.database.repository import DataBaseManager
 from src.database.migrations import MIGRATIONS, apply_migrations, Migration
 from src.database.models import Comment, CommentTypes
+from src.shared.time_utils import get_moscow_date
 
 
 def test_fresh_db_applies_all_migrations(db_manager, db_cursor):
@@ -36,9 +38,13 @@ def test_comments_has_partial_unique_indexes(db_manager, db_cursor):
 
 
 def test_migrate_old_schema_preserves_data(temp_db_path):
+    today = date.fromisoformat(get_moscow_date())
+    first_date = (today + timedelta(days=1)).isoformat()
+    second_date = (today + timedelta(days=3)).isoformat()
+
     with sqlite3.connect(temp_db_path) as conn:
         conn.executescript(
-            """
+            f"""
             CREATE TABLE comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 group_id INTEGER NOT NULL,
@@ -49,9 +55,9 @@ def test_migrate_old_schema_preserves_data(temp_db_path):
                 UNIQUE(group_id, comment_type, comment_text)
             );
             INSERT INTO comments (group_id, comment_type, comment_text, scheduled_date, use_count)
-            VALUES (-100, 'scheduled', 'alvldvvla', '2026-06-02', 0);
+            VALUES (-100, 'scheduled', 'alvldvvla', '{first_date}', 0);
             INSERT INTO comments (group_id, comment_type, comment_text, scheduled_date, use_count)
-            VALUES (-100, 'scheduled', 'zhopa', '2026-10-04', 0);
+            VALUES (-100, 'scheduled', 'zhopa', '{second_date}', 0);
             INSERT INTO comments (group_id, comment_type, comment_text, scheduled_date, use_count)
             VALUES (-100, 'text', 'kruto', NULL, 0);
             """
@@ -69,8 +75,8 @@ def test_migrate_old_schema_preserves_data(temp_db_path):
         conn.close()
 
     assert [(r["comment_text"], r["comment_type"], r["scheduled_date"]) for r in rows] == [
-        ("alvldvvla", "scheduled", "2026-06-02"),
-        ("zhopa", "scheduled", "2026-10-04"),
+        ("alvldvvla", "scheduled", first_date),
+        ("zhopa", "scheduled", second_date),
         ("kruto", "text", None),
     ]
 
