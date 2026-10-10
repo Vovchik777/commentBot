@@ -370,3 +370,49 @@ def test_row_to_comment_unknown_type_raises(db_manager, db_cursor, user_factory)
 
     with pytest.raises(ValueError):
         db_manager.get_comments_list(user.tg_group_id)
+
+def test_update_use_count_comment_success(db_manager, db_cursor, comment_factory):
+    comment = comment_factory()
+    db_manager.add_comment(comment)
+    db_manager.update_use_count_comment(comment)
+
+    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
+
+
+
+    assert db_cursor.fetchone()[0] == 1
+
+
+def test_update_use_count_comment_not_found(db_manager, db_cursor, comment_factory):
+    comment = comment_factory()
+    comment2 = comment_factory(tg_group_id = comment.group_id + 1)
+    db_manager.add_comment(comment)
+    db_manager.update_use_count_comment(comment2)
+
+    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment2.group_id, comment2.comment_text, comment2.comment_type))
+
+
+
+    assert db_cursor.fetchone() is None
+
+    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
+
+    assert db_cursor.fetchone()[0] == 0
+
+
+def test_update_use_count_comment_many(db_manager, db_cursor, comment_factory):
+    comment = comment_factory()
+    comment2 = comment_factory(tg_group_id = comment.group_id + 1)
+    db_manager.add_comment(comment)
+    db_manager.add_comment(comment2)
+    db_manager.update_use_count_comment(comment2)
+
+    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment2.group_id, comment2.comment_text, comment2.comment_type))
+
+
+
+    assert db_cursor.fetchone()[0] == 1
+
+    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
+
+    assert db_cursor.fetchone()[0] == 0

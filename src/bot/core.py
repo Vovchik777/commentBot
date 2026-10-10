@@ -183,6 +183,8 @@ class TelegramBot:
 
             text = self.comments_manager.parse_comment_template(comment.comment_text)
 
+            self.db.update_use_count_comment(comment)
+
             logger.info(f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}")
             return self.send_message(chat_id=chat_id, text=text, reply_to_message_id=message_id)
         except Exception as e:

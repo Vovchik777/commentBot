@@ -328,6 +328,22 @@ class DataBaseManager:
             ).fetchone()
             return self._row_to_comment(row) if row else None
 
+
+    def update_use_count_comment(self, comment:Comment) -> None:
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            conn.execute(
+                """
+                UPDATE comments
+                SET use_count = use_count + 1
+                WHERE group_id = ?
+                AND comment_text = ?
+                AND comment_type = ?
+                """,
+                (comment.group_id, comment.comment_text, comment.comment_type,)
+            )
+            conn.commit()
+
+
     def get_scheduled_for_today(self, group_id: int, today_str: str) -> List[Comment]:
         with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
             conn.row_factory = sqlite3.Row
