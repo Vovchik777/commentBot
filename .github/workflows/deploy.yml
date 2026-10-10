@@ -1,0 +1,46 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка зависимостей
+        run: pip install -r requirements.txt pytest
+
+      - name: Тесты
+        run: python -m pytest -q -p no:cacheprovider
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Настройка SSH
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ssh-alicerasp.alwaysdata.net >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: git pull на сервере
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes alicerasp@ssh-alicerasp.alwaysdata.net \
+            "cd ~/commentBot && git pull --ff-only && python -m pip install -r requirements.txt --user"
+
+      - name: Рестарт сайта через API
+        run: |
+          code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --basic --user "${{ secrets.ALWAYSDATA_API_KEY }} account=alicerasp:" \
+            --request POST https://api.alwaysdata.com/v1/site/987318/restart/)
+          echo "HTTP $code"
+          test "$code" = "204"

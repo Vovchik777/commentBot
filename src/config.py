@@ -23,8 +23,7 @@ class Config:
     ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
     ADMIN_PASS: str = os.getenv("ADMIN_PASS", "secure_pass")
 
-
-    TTL_ALBUM_PROCESSED : int = 3600
+    TTL_ALBUM_PROCESSED: int = 3600
     TTL_BANWORDS: int = 300
 
     def __post_init__(self):

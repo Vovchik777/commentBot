@@ -1,5 +1,4 @@
 from functools import wraps
-import logging
 from flask import Flask, Response, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
