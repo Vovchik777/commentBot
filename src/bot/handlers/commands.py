@@ -103,7 +103,6 @@ class MessageHandler:
                 chat_id,
                 "чтобы зарегистрироваться напиши /register",
             )
-            
 
     @required_permission(PermissionLevel.BASE)
     def handle_get_banwords(self, message_data: Dict[str, Any]) -> None:
@@ -652,14 +651,14 @@ class MessageHandler:
             return
 
         date = parts[1]
-        
+
         if not Comment.parse_scheduled_date(date):
             self.bot.send_message(
-                            chat_id,
-                            "Дата должна быть строго в формате ГГГГ-ММ-ДД и не раньше текущего дня",
-                            reply_to_message_id=msg_id,
-                        )
-            return 
+                chat_id,
+                "Дата должна быть строго в формате ГГГГ-ММ-ДД и не раньше текущего дня",
+                reply_to_message_id=msg_id,
+            )
+            return
         comment_text = " ".join(parts[2:])
 
         success = self.bot.comments_manager.add_comment(Comment(chat_id, CommentTypes.SCHEDULED, comment_text, date))
@@ -699,119 +698,55 @@ class MessageHandler:
         )
 
     @required_permission(PermissionLevel.DEV)
-    def handle_get_user_info(self, message_data: Dict[str, Any]) -> None:
+    def handle_get_user_info(self, message_data):
         chat_id = message_data["chat"]["id"]
-        text = message_data.get("text", "")
-
-        parts = text.split()
+        is_private = message_data["chat"]["type"] == "private"
+        parts = message_data.get("text", "").split()
         if len(parts) < 2:
             self.bot.send_message(chat_id, "Используйте: /get_user_info [chat_id | username]")
             return
-
-        identifier = parts[1]
-
-        if message_data["chat"]["type"] == "private":
-            try:
-                target_chat_id = int(identifier)
-            except ValueError:
-                target_user = self.bot.db.get_user_by_username(identifier)
-                if not target_user:
-                    self.bot.send_message(chat_id, "Пользователь не найден")
-                    return
-
-                if isinstance(target_user, list):
-                    first_user = target_user[0]
-                    user_info = self.bot.get_chat_info(first_user.tg_user_id)
-
-                    if user_info:
-                        info_text = (
-                            f"Данные по пользователю @{identifier}:\n"
-                            f"ID: {user_info['id']}\n"
-                            f"Имя: {user_info.get('first_name', 'Не указано')}\n"
-                            f"Фамилия: {user_info.get('last_name', 'Не указана')}\n"
-                            f"Username: @{user_info.get('username', 'Не указан')}\n"
-                            f"Найден в {len(target_user)} группе(ах):\n"
-                        )
-
-                        for i, user in enumerate(target_user, 1):
-                            info_text += f"{i}. Группа: {user.tg_group_id} ({self.bot.get_chat_info(user.tg_group_id)['title']}), Права: {user.permission.to_string()}\n"
-
-                        self.bot.send_message(chat_id, info_text)
-                    else:
-                        self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
-                else:
-                    user_info = self.bot.get_chat_info(target_user.tg_user_id)
-                    if user_info:
-                        info_text = (
-                            f"Данные по пользователю @{identifier}:\n"
-                            f"ID: {user_info['id']}\n"
-                            f"Имя: {user_info.get('first_name', 'Не указано')}\n"
-                            f"Фамилия: {user_info.get('last_name', 'Не указана')}\n"
-                            f"Username: @{user_info.get('username', 'Не указан')}\n"
-                            f"Группа: {target_user.tg_group_id} ({self.bot.get_chat_info(user.tg_group_id)['title']}), Права: {target_user.permission.to_string()}"
-                        )
-                        self.bot.send_message(chat_id, info_text)
-                    else:
-                        self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
-            else:
-                user_info = self.bot.get_chat_info(target_chat_id)
-                if user_info:
-                    info_text = (
-                        f"Данные по чату {target_chat_id}:\n"
-                        f"ID: {user_info['id']}\n"
-                        f"Имя: {user_info.get('first_name', 'Не указано')}\n"
-                        f"Фамилия: {user_info.get('last_name', 'Не указана')}\n"
-                        f"Username: @{user_info.get('username', 'Не указан')}\n"
-                        f"Тип: {user_info.get('type', 'Не указан')}"
-                    )
-                    self.bot.send_message(chat_id, info_text)
-                else:
-                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
+        identifier = parts[1].lstrip("@")
+        if identifier.lstrip("-").isdecimal():
+            self._show_chat_info(chat_id, int(identifier), is_private)
         else:
-            try:
-                target_chat_id = int(identifier)
-            except ValueError:
-                target_user = self.bot.db.get_user_by_username(identifier)
-                if not target_user:
-                    self.bot.send_message(chat_id, "Пользователь не найден")
-                    return
-                target_user = target_user[0]
+            self._show_user_info(chat_id, identifier, is_private)
 
-                user_info = self.bot.get_chat_info(target_user.tg_user_id)
-                if user_info:
-                    permission_info = (
-                        f"Права в этой группе: {target_user.permission.to_string()}"
-                        if target_user.tg_group_id == chat_id
-                        else "Пользователь не зарегистрирован в этой группе"
-                    )
-                    info_text = (
-                        f"Данные по пользователю @{identifier}:\n"
-                        f"ID: {user_info['id']}\n"
-                        f"Username: @{user_info.get('username', 'Не указан')}\n"
-                        f"{permission_info}"
-                    )
-                    self.bot.send_message(chat_id, info_text)
-                else:
-                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
-            else:
-                user_info = self.bot.get_chat_info(target_chat_id)
-                if user_info:
-                    user_in_group = self.bot.db.get_user(target_chat_id, chat_id)
-                    permission_info = ""
-                    if user_in_group:
-                        permission_info = f"\nПрава в этой группе: {user_in_group.permission.to_string()}"
-                    else:
-                        permission_info = "\nПользователь не зарегистрирован в этой группе"
+    def _show_chat_info(self, chat_id, target_chat_id, is_private):
+        info = self.bot.get_chat_info(target_chat_id)
+        if not info:
+            self.bot.send_message(chat_id, "Не удалось получить информацию")
+            return
+        permission_info = ""
+        if not is_private:
+            u = self.bot.db.get_user(target_chat_id, chat_id)
+            permission_info = f"\nПрава в этой группе: {u.permission.to_string()}" if u else "\nПользователь не зарегистрирован в этой группе"
+        self.bot.send_message(chat_id, self._fmt_chat(target_chat_id, info, permission_info))
 
-                    info_text = (
-                        f"Данные по чату {target_chat_id}:\n"
-                        f"ID: {user_info['id']}\n"
-                        f"Username: @{user_info.get('username', 'Не указан')}"
-                        f"{permission_info}"
-                    )
-                    self.bot.send_message(chat_id, info_text)
-                else:
-                    self.bot.send_message(chat_id, "Не удалось получить информацию о пользователе")
+    def _show_user_info(self, chat_id, username, is_private):
+        if is_private:
+            users = self.bot.db.get_user_by_username(username)  # всегда список
+            if not users:
+                self.bot.send_message(chat_id, "Пользователь не найден")
+                return
+            info = self.bot.get_chat_info(users[0].tg_user_id)
+            if not info:
+                self.bot.send_message(chat_id, "Не удалось получить информацию")
+                return
+            lines = [self._fmt_profile(username, info), f"Найден в {len(users)} группе(ах):"]
+            for i, u in enumerate(users, 1):
+                title = self.bot.get_chat_info(u.tg_group_id).get("title", "неизвестно")
+                lines.append(f"{i}. Группа: {u.tg_group_id} ({title}), Права: {u.permission.to_string()}")
+            self.bot.send_message(chat_id, "\n".join(lines))
+        else:
+            u = self.bot.db.get_user_by_username(username, chat_id)  # User|None
+            if not u:
+                self.bot.send_message(chat_id, "Пользователь не зарегистрирован в этой группе")
+                return
+            info = self.bot.get_chat_info(u.tg_user_id)
+            if not info:
+                self.bot.send_message(chat_id, "Не удалось получить информацию")
+                return
+            self.bot.send_message(chat_id, self._fmt_profile(username, info) + f"\nПрава в этой группе: {u.permission.to_string()}")
 
     def handle_answer(self, message_data: Dict[str, Any]) -> None:
         chat_id = message_data["chat"]["id"]
@@ -848,3 +783,17 @@ class MessageHandler:
         )
 
         self.bot.send_message(chat_id, "Ответ отправлен")
+
+    @staticmethod
+    def _fmt_profile(identifier: str, info: Dict[str, Any]) -> str:
+        return (
+            f"Данные по пользователю @{identifier}:\n"
+            f"ID: {info.get('id')}\n"
+            f"Имя: {info.get('first_name', 'Не указано')}\n"
+            f"Фамилия: {info.get('last_name', 'Не указана')}\n"
+            f"Username: @{info.get('username', 'Не указан')}"
+        )
+
+    @staticmethod
+    def _fmt_chat(target_chat_id: int, info: Dict[str, Any], permission_info: str = "") -> str:
+        return f"Данные по чату {target_chat_id}:\n" f"ID: {info.get('id')}\n" f"Username: @{info.get('username', 'Не указан')}" f"{permission_info}"
