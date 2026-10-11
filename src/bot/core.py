@@ -61,7 +61,9 @@ class TelegramBot:
     ) -> Optional[Dict]:
         MAX_LENGHT = 4096
         if len(text) <= MAX_LENGHT:
-            return self._send_single_message(chat_id, text, reply_to_message_id, reply_markup, parse_mode)
+            return self._send_single_message(
+                chat_id, text, reply_to_message_id, reply_markup, parse_mode
+            )
         else:
             return self._send_long_message(chat_id, text, reply_to_message_id, parse_mode)
 
@@ -165,7 +167,9 @@ class TelegramBot:
     def get_user_info(self, user_id: int) -> Dict[str, Any]:
         return self.get_chat_info(user_id)
 
-    def send_comment_to_message(self, chat_id: int, message_id: int, is_media: bool = False) -> Optional[Dict]:
+    def send_comment_to_message(
+        self, chat_id: int, message_id: int, is_media: bool = False
+    ) -> Optional[Dict]:
         try:
             comment_type = CommentTypes.PHOTO if is_media else CommentTypes.TEXT
 
@@ -185,13 +189,17 @@ class TelegramBot:
 
             self.db.update_use_count_comment(comment)
 
-            logger.info(f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}")
+            logger.info(
+                f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}"
+            )
             return self.send_message(chat_id=chat_id, text=text, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None
 
-    def _get_different_comment(self, chat_id: int, comment_type: CommentTypes, current_comment: Comment) -> Comment:
+    def _get_different_comment(
+        self, chat_id: int, comment_type: CommentTypes, current_comment: Comment
+    ) -> Comment:
         comments = self.comments_manager.get_comments_list(chat_id)
         available = comments.get(comment_type, [])
         if len(available) <= 1:

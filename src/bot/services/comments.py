@@ -33,7 +33,9 @@ class CommentsManager:
     def add_comment(self, comment: Comment) -> bool:
         return self.db.add_comment(comment)
 
-    def delete_comment(self, group_id: int, comment_type: CommentTypes, index: int) -> Optional[Comment]:
+    def delete_comment(
+        self, group_id: int, comment_type: CommentTypes, index: int
+    ) -> Optional[Comment]:
         return self.db.delete_comment(group_id, comment_type, index)
 
     def get_random_comment(self, group_id: int, comment_type: CommentTypes) -> Optional[Comment]:

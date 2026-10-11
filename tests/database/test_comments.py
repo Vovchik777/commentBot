@@ -1,5 +1,3 @@
-from sqlite3 import Row
-
 import pytest
 
 from src.database.models import Comment, CommentTypes
@@ -119,7 +117,11 @@ def test_get_scheduled_for_today_multiply_match(comments_manager, comment_factor
     N = 10
     comments = list()
     for i in range(N):
-        comment = comment_factory(scheduled_date="1234-12-34", comment_type=CommentTypes.SCHEDULED, comment_text=f"zhopa bobra {i}")
+        comment = comment_factory(
+            scheduled_date="1234-12-34",
+            comment_type=CommentTypes.SCHEDULED,
+            comment_text=f"zhopa bobra {i}",
+        )
         comments_manager.add_comment(comment)
         comments.append(comment)
 
@@ -145,7 +147,11 @@ def test_get_scheduled_for_today_other_date(comments_manager, comment_factory):
 
 def test_get_scheduled_for_today_other_group(comments_manager, comment_factory):
     comment1 = comment_factory(scheduled_date="1234-12-34", comment_type=CommentTypes.SCHEDULED)
-    comment2 = comment_factory(tg_group_id=comment1.group_id + 1, scheduled_date="1234-12-34", comment_type=CommentTypes.SCHEDULED)
+    comment2 = comment_factory(
+        tg_group_id=comment1.group_id + 1,
+        scheduled_date="1234-12-34",
+        comment_type=CommentTypes.SCHEDULED,
+    )
 
     comments_manager.add_comment(comment1)
     comments_manager.add_comment(comment2)
@@ -239,7 +245,9 @@ def test_get_comments_list_mixed_types(comment_factory, comments_manager, db_man
 
     comment_text = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.TEXT)
     comment_photo = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.PHOTO)
-    comment_scheduled = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34")
+    comment_scheduled = comment_factory(
+        tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34"
+    )
 
     for c in (comment_text, comment_photo, comment_scheduled):
         comments_manager.add_comment(c)
@@ -252,9 +260,14 @@ def test_get_comments_list_mixed_types(comment_factory, comments_manager, db_man
 
 def test_get_comments_list_scheduled_single_date(comment_factory, comments_manager, db_manager):
     group_id = 123123
-    comment1 = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34")
+    comment1 = comment_factory(
+        tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34"
+    )
     comment2 = comment_factory(
-        comment_text=comment1.comment_text + "asde", tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34"
+        comment_text=comment1.comment_text + "asde",
+        tg_group_id=group_id,
+        comment_type=CommentTypes.SCHEDULED,
+        scheduled_date="1234-12-34",
     )
 
     comments_manager.add_comment(comment1)
@@ -267,9 +280,14 @@ def test_get_comments_list_scheduled_single_date(comment_factory, comments_manag
 
 def test_get_comments_list_scheduled_multiple_dates(comment_factory, comments_manager, db_manager):
     group_id = 123123
-    comment1 = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34")
+    comment1 = comment_factory(
+        tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34"
+    )
     comment2 = comment_factory(
-        comment_text=comment1.comment_text + "asde", tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="9999-99-99"
+        comment_text=comment1.comment_text + "asde",
+        tg_group_id=group_id,
+        comment_type=CommentTypes.SCHEDULED,
+        scheduled_date="9999-99-99",
     )
 
     comments_manager.add_comment(comment1)
@@ -289,12 +307,20 @@ def test_get_comments_list_scheduled_multiple_dates(comment_factory, comments_ma
 
 def test_get_comments_list_scheduled_mixed_dates(comment_factory, comments_manager, db_manager):
     group_id = 123123
-    comment1 = comment_factory(tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34")
+    comment1 = comment_factory(
+        tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="1234-12-34"
+    )
     comment2 = comment_factory(
-        comment_text=comment1.comment_text + "asde", tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="9999-99-99"
+        comment_text=comment1.comment_text + "asde",
+        tg_group_id=group_id,
+        comment_type=CommentTypes.SCHEDULED,
+        scheduled_date="9999-99-99",
     )
     comment3 = comment_factory(
-        comment_text=comment2.comment_text + "asde", tg_group_id=group_id, comment_type=CommentTypes.SCHEDULED, scheduled_date="9999-99-99"
+        comment_text=comment2.comment_text + "asde",
+        tg_group_id=group_id,
+        comment_type=CommentTypes.SCHEDULED,
+        scheduled_date="9999-99-99",
     )
 
     comments_manager.add_comment(comment1)
@@ -311,7 +337,9 @@ def test_get_comments_list_scheduled_mixed_dates(comment_factory, comments_manag
     }
 
 
-def test_get_comments_list_scheduled_null_date(comment_factory, comments_manager, db_manager, db_cursor):
+def test_get_comments_list_scheduled_null_date(
+    comment_factory, comments_manager, db_manager, db_cursor
+):
     group_id = 123123
     comment = comment_factory(comment_type=CommentTypes.SCHEDULED, scheduled_date=None)
 
@@ -340,7 +368,9 @@ def test_get_comments_list_scheduled_null_date(comment_factory, comments_manager
 def test_get_comments_list_other_group(comment_factory, comments_manager, db_manager):
     group_id = 123123
     comment1 = comment_factory(tg_group_id=group_id)
-    comment2 = comment_factory(comment_text=comment1.comment_text + "asde", tg_group_id=group_id + 1)
+    comment2 = comment_factory(
+        comment_text=comment1.comment_text + "asde", tg_group_id=group_id + 1
+    )
     comments_manager.add_comment(comment1)
     comments_manager.add_comment(comment2)
 
@@ -371,48 +401,58 @@ def test_row_to_comment_unknown_type_raises(db_manager, db_cursor, user_factory)
     with pytest.raises(ValueError):
         db_manager.get_comments_list(user.tg_group_id)
 
+
 def test_update_use_count_comment_success(db_manager, db_cursor, comment_factory):
     comment = comment_factory()
     db_manager.add_comment(comment)
     db_manager.update_use_count_comment(comment)
 
-    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
-
-
+    db_cursor.execute(
+        "SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?",
+        (comment.group_id, comment.comment_text, comment.comment_type),
+    )
 
     assert db_cursor.fetchone()[0] == 1
 
 
 def test_update_use_count_comment_not_found(db_manager, db_cursor, comment_factory):
     comment = comment_factory()
-    comment2 = comment_factory(tg_group_id = comment.group_id + 1)
+    comment2 = comment_factory(tg_group_id=comment.group_id + 1)
     db_manager.add_comment(comment)
     db_manager.update_use_count_comment(comment2)
 
-    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment2.group_id, comment2.comment_text, comment2.comment_type))
-
-
+    db_cursor.execute(
+        "SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?",
+        (comment2.group_id, comment2.comment_text, comment2.comment_type),
+    )
 
     assert db_cursor.fetchone() is None
 
-    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
+    db_cursor.execute(
+        "SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?",
+        (comment.group_id, comment.comment_text, comment.comment_type),
+    )
 
     assert db_cursor.fetchone()[0] == 0
 
 
 def test_update_use_count_comment_many(db_manager, db_cursor, comment_factory):
     comment = comment_factory()
-    comment2 = comment_factory(tg_group_id = comment.group_id + 1)
+    comment2 = comment_factory(tg_group_id=comment.group_id + 1)
     db_manager.add_comment(comment)
     db_manager.add_comment(comment2)
     db_manager.update_use_count_comment(comment2)
 
-    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment2.group_id, comment2.comment_text, comment2.comment_type))
-
-
+    db_cursor.execute(
+        "SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?",
+        (comment2.group_id, comment2.comment_text, comment2.comment_type),
+    )
 
     assert db_cursor.fetchone()[0] == 1
 
-    db_cursor.execute("SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?", (comment.group_id, comment.comment_text, comment.comment_type))
+    db_cursor.execute(
+        "SELECT use_count FROM comments WHERE group_id = ? AND comment_text = ? AND comment_type = ?",
+        (comment.group_id, comment.comment_text, comment.comment_type),
+    )
 
     assert db_cursor.fetchone()[0] == 0

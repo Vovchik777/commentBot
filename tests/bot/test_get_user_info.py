@@ -13,7 +13,9 @@ class FakeBot:
         self.sent = []
         self.chats = {}
 
-    def send_message(self, chat_id, text, reply_to_message_id=None, reply_markup=None, parse_mode="HTML"):
+    def send_message(
+        self, chat_id, text, reply_to_message_id=None, reply_markup=None, parse_mode="HTML"
+    ):
         self.sent.append(text)
         return {"ok": True, "result": {"message_id": len(self.sent)}}
 
@@ -34,11 +36,18 @@ def env(db_manager):
 
 
 def _add(db, group_id, user_id, username, level=PermissionLevel.DEV):
-    return db.add_user(User(tg_group_id=group_id, tg_user_id=user_id, username=username, permission=level))
+    return db.add_user(
+        User(tg_group_id=group_id, tg_user_id=user_id, username=username, permission=level)
+    )
 
 
 def _msg(chat_id, chat_type, user_id, text):
-    return {"chat": {"id": chat_id, "type": chat_type}, "from": {"id": user_id}, "text": text, "message_id": 42}
+    return {
+        "chat": {"id": chat_id, "type": chat_type},
+        "from": {"id": user_id},
+        "text": text,
+        "message_id": 42,
+    }
 
 
 def test_usage_when_no_identifier(env):

@@ -27,8 +27,12 @@ def db_cursor(temp_db_path):
 def user_factory():
     from src.database.models import User, PermissionLevel
 
-    def _make_user(tg_group_id=12313123, tg_user_id=777, username="default", permission=PermissionLevel.BASE):
-        return User(tg_group_id=tg_group_id, tg_user_id=tg_user_id, username=username, permission=permission)
+    def _make_user(
+        tg_group_id=12313123, tg_user_id=777, username="default", permission=PermissionLevel.BASE
+    ):
+        return User(
+            tg_group_id=tg_group_id, tg_user_id=tg_user_id, username=username, permission=permission
+        )
 
     return _make_user
 
@@ -37,7 +41,12 @@ def user_factory():
 def comment_factory():
     from src.database.models import Comment, CommentTypes
 
-    def _make_comment(tg_group_id=123123, comment_type=CommentTypes.TEXT, comment_text="asdads", scheduled_date=None):
+    def _make_comment(
+        tg_group_id=123123,
+        comment_type=CommentTypes.TEXT,
+        comment_text="asdads",
+        scheduled_date=None,
+    ):
         return Comment(tg_group_id, comment_type, comment_text, scheduled_date)
 
     return _make_comment

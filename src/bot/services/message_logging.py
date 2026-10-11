@@ -16,7 +16,9 @@ class MessageLogsManager:
         conn.row_factory = sqlite3.Row
         return conn
 
-    def add_message_log(self, bot_msg_id: int, chat_id: int, original_msg_id: int, text: str) -> None:
+    def add_message_log(
+        self, bot_msg_id: int, chat_id: int, original_msg_id: int, text: str
+    ) -> None:
         current_time = get_moscow_now()
         try:
             with closing(self._conn()) as conn:
@@ -30,13 +32,17 @@ class MessageLogsManager:
 
     def get_message_info(self, bot_msg_id: int) -> Optional[Dict[str, Any]]:
         with closing(self._conn()) as conn:
-            row = conn.execute("SELECT chat_id, original_message_id, text FROM message_logs WHERE bot_message_id=?", (bot_msg_id,)).fetchone()
+            row = conn.execute(
+                "SELECT chat_id, original_message_id, text FROM message_logs WHERE bot_message_id=?",
+                (bot_msg_id,),
+            ).fetchone()
             return {"chat_id": row[0], "message_id": row[1], "text": row[2]} if row else None
 
     def get_bot_message_info(self, message_id: int) -> Optional[Dict[str, Any]]:
         with closing(self._conn()) as conn:
             row = conn.execute(
-                "SELECT bot_message_id, chat_id, text, timestamp FROM message_logs WHERE original_message_id=?", (message_id,)
+                "SELECT bot_message_id, chat_id, text, timestamp FROM message_logs WHERE original_message_id=?",
+                (message_id,),
             ).fetchone()
             return {str(row["bot_message_id"]): dict(row)} if row else None
 
@@ -54,5 +60,7 @@ class MessageLogsManager:
 
     def get_logged_messages(self) -> Dict[str, Dict[str, Any]]:
         with closing(self._conn()) as conn:
-            rows = conn.execute("SELECT bot_message_id, chat_id, text, timestamp FROM message_logs").fetchall()
+            rows = conn.execute(
+                "SELECT bot_message_id, chat_id, text, timestamp FROM message_logs"
+            ).fetchall()
             return {str(row["bot_message_id"]): dict(row) for row in rows}

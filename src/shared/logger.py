@@ -25,13 +25,17 @@ def _init_logger(
     logger.setLevel(level)
     logger.propagate = False
 
-    fmt = logging.Formatter("%(asctime)s | %(levelname)-8s | %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    fmt = logging.Formatter(
+        "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+    )
 
     console = logging.StreamHandler()
     console.setFormatter(fmt)
     logger.addHandler(console)
 
-    file_h = TimedRotatingFileHandler(log_path, when="midnight", interval=1, backupCount=7, encoding="utf-8")
+    file_h = TimedRotatingFileHandler(
+        log_path, when="midnight", interval=1, backupCount=7, encoding="utf-8"
+    )
     file_h.setFormatter(fmt)
     file_h.addFilter(SingleLineFilter())
     logger.addHandler(file_h)

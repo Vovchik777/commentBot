@@ -16,7 +16,7 @@
 
 ## Стек
 
-`Python 3.10+` · `Flask 3.0` · `SQLite (WAL)` · `Faker` · `requests` · `pytz` · `pytest` · `uWSGI (alwaysdata)`
+`Python 3.10+` · `Flask 3.0` · `SQLite (WAL)` · `Faker` · `requests` · `pytz` · `pytest` · `Ruff` · `uWSGI (alwaysdata)`
 
 ## Команды бота
 
@@ -130,11 +130,24 @@ python -m src.main     # http://localhost:8000
 
 ## Тесты
 
-`pytest` не входит в `requirements.txt` — установи отдельно:
+`pytest` не входит в `requirements.txt` — установи отдельно (или возьми `requirements-dev.txt`):
 
 ```bash
 pip install pytest
 python -m pytest -q
+```
+
+## Линт и форматирование
+
+Линт и форматтер — **Ruff** (конфиг в `ruff.toml`). Зависимости разработки собраны в `requirements-dev.txt`:
+
+```bash
+pip install -r requirements-dev.txt
+ruff check . --fix      # линт (+ автофикс)
+ruff format .           # форматирование (или --check без изменений)
+
+pre-commit install      # хук: Ruff авто-фиксит перед коммитом
+pre-commit run --all-files
 ```
 
 ## Деплой
@@ -144,6 +157,7 @@ python -m pytest -q
 Автодеплой через GitHub Actions (`.github/workflows/deploy.yml`) при push в `main`:
 
 1. **test** — Python 3.12, установка зависимостей и `pytest`;
-2. **deploy** — SSH на сервер, `git pull --ff-only` + `pip install`, затем рестарт сайта через alwaysdata API.
+2. **lint** — Ruff (`check` + `format --check`), **advisory**: джоб не блокирует деплой (`continue-on-error`);
+3. **deploy** — SSH на сервер, `git pull --ff-only` + `pip install`, затем рестарт сайта через alwaysdata API.
 
 > Не заливать `storage/users.db` — перезапись базы стирает пользователей, комментарии и права без предупреждения.

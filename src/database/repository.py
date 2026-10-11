@@ -101,7 +101,9 @@ class DataBaseManager:
         def cleanup_task():
             while True:
                 try:
-                    with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+                    with closing(
+                        sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
+                    ) as conn:
                         now = time.time()
                         conn.execute("DELETE FROM processed_albums WHERE expires_at < ?", (now,))
                         conn.execute("DELETE FROM banwords_cache WHERE expires_at < ?", (now,))
@@ -136,11 +138,22 @@ class DataBaseManager:
                 """,
                 (tg_user_id, tg_group_id),
             ).fetchone()
-            return User(tg_user_id=tg_user_id, username=result[0], permission=PermissionLevel(result[1]), tg_group_id=tg_group_id) if result else None
+            return (
+                User(
+                    tg_user_id=tg_user_id,
+                    username=result[0],
+                    permission=PermissionLevel(result[1]),
+                    tg_group_id=tg_group_id,
+                )
+                if result
+                else None
+            )
 
     def add_user(self, user: User) -> bool:
         try:
-            with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            with closing(
+                sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
+            ) as conn:
                 conn.row_factory = sqlite3.Row
                 self.create_group_table(user.tg_group_id)
                 cursor = conn.cursor()
@@ -189,7 +202,9 @@ class DataBaseManager:
             conn.commit()
             return res.rowcount > 0
 
-    def get_user_by_username(self, username: str, tg_group_id: Optional[int] = None) -> Optional[User | List[User]]:
+    def get_user_by_username(
+        self, username: str, tg_group_id: Optional[int] = None
+    ) -> Optional[User | List[User]]:
         with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
             conn.row_factory = sqlite3.Row
             if username.startswith("@"):
@@ -205,7 +220,14 @@ class DataBaseManager:
                     (username, tg_group_id),
                 ).fetchone()
                 return (
-                    User(tg_group_id=tg_group_id, tg_user_id=result[0], username=username, permission=PermissionLevel(result[1])) if result else None
+                    User(
+                        tg_group_id=tg_group_id,
+                        tg_user_id=result[0],
+                        username=username,
+                        permission=PermissionLevel(result[1]),
+                    )
+                    if result
+                    else None
                 )
             else:
                 results = conn.execute(
@@ -217,7 +239,17 @@ class DataBaseManager:
                     (username,),
                 ).fetchall()
                 return (
-                    [User(tg_user_id=r[0], username=r[1], tg_group_id=r[2], permission=PermissionLevel(r[3])) for r in results] if results else None
+                    [
+                        User(
+                            tg_user_id=r[0],
+                            username=r[1],
+                            tg_group_id=r[2],
+                            permission=PermissionLevel(r[3]),
+                        )
+                        for r in results
+                    ]
+                    if results
+                    else None
                 )
 
     def update_user_permission(self, user: User, new_permission: PermissionLevel) -> bool:
@@ -240,12 +272,24 @@ class DataBaseManager:
                 """,
                 (tg_group_id,),
             ).fetchall()
-            return [User(tg_user_id=r[0], username=r[1], permission=PermissionLevel(r[2]), tg_group_id=tg_group_id) for r in results]
+            return [
+                User(
+                    tg_user_id=r[0],
+                    username=r[1],
+                    permission=PermissionLevel(r[2]),
+                    tg_group_id=tg_group_id,
+                )
+                for r in results
+            ]
 
     def check_username(self, tg_user_id: int, username: str) -> None:
         try:
-            with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
-                conn.execute("UPDATE users SET username=? WHERE tg_user_id=?", (username, tg_user_id))
+            with closing(
+                sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
+            ) as conn:
+                conn.execute(
+                    "UPDATE users SET username=? WHERE tg_user_id=?", (username, tg_user_id)
+                )
                 conn.commit()
         except Exception as e:
             logger.error(f"Ошибка обновления имени: {e}")
@@ -263,7 +307,9 @@ class DataBaseManager:
         try:
             now = time.time()
             expires_at = now + config.TTL_ALBUM_PROCESSED
-            with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            with closing(
+                sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
+            ) as conn:
                 cursor = conn.execute(
                     "INSERT OR IGNORE INTO processed_albums (media_group_id, timestamp, expires_at) VALUES (?, ?, ?)",
                     (media_group_id, now, expires_at),
@@ -278,7 +324,9 @@ class DataBaseManager:
         if comment.comment_type == CommentTypes.SCHEDULED and comment.scheduled_date is None:
             return False
         try:
-            with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            with closing(
+                sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
+            ) as conn:
                 cursor = conn.execute(
                     """
                     INSERT OR IGNORE INTO comments
@@ -299,10 +347,16 @@ class DataBaseManager:
             logger.error(f"Ошибка добавления комментария: {e}")
             return False
 
-    def delete_comment(self, group_id: int, comment_type: CommentTypes, index: int) -> Optional[Comment]:
+    def delete_comment(
+        self, group_id: int, comment_type: CommentTypes, index: int
+    ) -> Optional[Comment]:
         if index < 1:
             return None
-        order = "ORDER BY scheduled_date, id" if comment_type == CommentTypes.SCHEDULED else "ORDER BY id"
+        order = (
+            "ORDER BY scheduled_date, id"
+            if comment_type == CommentTypes.SCHEDULED
+            else "ORDER BY id"
+        )
         with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
             conn.row_factory = sqlite3.Row
             row = conn.execute(
@@ -336,8 +390,7 @@ class DataBaseManager:
             ).fetchone()
             return self._row_to_comment(row) if row else None
 
-
-    def update_use_count_comment(self, comment:Comment) -> None:
+    def update_use_count_comment(self, comment: Comment) -> None:
         with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
             conn.execute(
                 """
@@ -347,10 +400,13 @@ class DataBaseManager:
                 AND comment_text = ?
                 AND comment_type = ?
                 """,
-                (comment.group_id, comment.comment_text, comment.comment_type,)
+                (
+                    comment.group_id,
+                    comment.comment_text,
+                    comment.comment_type,
+                ),
             )
             conn.commit()
-
 
     def get_scheduled_for_today(self, group_id: int, today_str: str) -> List[Comment]:
         with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
@@ -480,8 +536,4 @@ class DataBaseManager:
 
     @staticmethod
     def _row_to_banword(row: sqlite3.Row) -> Banword:
-        return Banword(
-            group_id=row["group_id"],
-            pattern=row["pattern"],
-            reply=row["reply_text"]
-        )
+        return Banword(group_id=row["group_id"], pattern=row["pattern"], reply=row["reply_text"])

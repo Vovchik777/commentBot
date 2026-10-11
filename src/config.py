@@ -8,7 +8,6 @@ load_dotenv()
 
 @dataclass
 class Config:
-
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
     SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET", "default_secret")

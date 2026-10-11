@@ -89,7 +89,9 @@ def test_same_scheduled_text_two_dates(comments_manager):
     assert comments_manager.add_comment(second) is True
 
     for day in ("2026-10-11", "2026-10-12"):
-        assert [c.comment_text for c in comments_manager.get_scheduled_for_today(-100, day)] == ["zhopa"]
+        assert [c.comment_text for c in comments_manager.get_scheduled_for_today(-100, day)] == [
+            "zhopa"
+        ]
 
 
 def test_same_scheduled_text_same_date_duplicate(comments_manager):

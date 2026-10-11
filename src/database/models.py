@@ -100,7 +100,8 @@ class Comment:
         if raw < get_moscow_date():
             return None
         return raw
-    
+
+
 @dataclass
 class Banword:
     group_id: int

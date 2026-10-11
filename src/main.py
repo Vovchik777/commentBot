@@ -45,7 +45,7 @@ def webhook():
 
     secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if secret_token != config.SECRET_TOKEN:
-        logger.warning(f"Неавторизованный запрос.")
+        logger.warning("Неавторизованный запрос.")
         return "Unauthorized", 401
 
     try:

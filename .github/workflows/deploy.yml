@@ -16,10 +16,29 @@ jobs:
           python-version: "3.12"
 
       - name: Установка зависимостей
-        run: pip install -r requirements.txt pytest
+        run: pip install -r requirements-dev.txt
 
       - name: Тесты
         run: python -m pytest -q -p no:cacheprovider
+
+  lint:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Установка зависимостей
+        run: pip install -r requirements-dev.txt
+
+      - name: Ruff lint
+        run: python -m ruff check . --output-format=github
+
+      - name: Ruff format check
+        run: python -m ruff format --check .
 
   deploy:
     needs: test
