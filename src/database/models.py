@@ -56,7 +56,7 @@ class CommentTypes(str, Enum):
 class User:
     tg_group_id: int
     tg_user_id: int
-    username: str
+    username: Optional[str]
     permission: PermissionLevel = PermissionLevel.BASE
 
     # @property

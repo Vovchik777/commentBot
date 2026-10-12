@@ -162,7 +162,7 @@ class DataBaseManager:
                     "INSERT INTO users (username, tg_user_id) VALUES (?, ?) "
                     "ON CONFLICT(tg_user_id) DO UPDATE SET username = excluded.username "
                     "RETURNING id",
-                    (user.username, user.tg_user_id),
+                    (user.username or None, user.tg_user_id),
                 )
                 user_id = cursor.fetchone()[0]
 
@@ -215,7 +215,7 @@ class DataBaseManager:
                     SELECT u.tg_user_id, ug.permission FROM users AS u
                     JOIN users_groups AS ug ON u.id = ug.user_id
                     JOIN groups AS g ON ug.group_id = g.id
-                    WHERE u.username = ? AND g.tg_group_id = ?
+                    WHERE u.username = ? COLLATE NOCASE AND g.tg_group_id = ?
                     """,
                     (username, tg_group_id),
                 ).fetchone()
@@ -234,7 +234,7 @@ class DataBaseManager:
                     """
                     SELECT u.tg_user_id, u.username, g.tg_group_id, ug.permission FROM users AS u
                     JOIN users_groups AS ug ON u.id = ug.user_id
-                    JOIN groups AS g ON ug.group_id = g.id WHERE u.username = ?
+                    JOIN groups AS g ON ug.group_id = g.id WHERE u.username = ? COLLATE NOCASE
                     """,
                     (username,),
                 ).fetchall()
@@ -287,8 +287,14 @@ class DataBaseManager:
             with closing(
                 sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)
             ) as conn:
+                new_username = username or None
+                if new_username is not None:
+                    conn.execute(
+                        "UPDATE users SET username=NULL WHERE username=? AND tg_user_id<>?",
+                        (new_username, tg_user_id),
+                    )
                 conn.execute(
-                    "UPDATE users SET username=? WHERE tg_user_id=?", (username, tg_user_id)
+                    "UPDATE users SET username=? WHERE tg_user_id=?", (new_username, tg_user_id)
                 )
                 conn.commit()
         except Exception as e:

@@ -70,7 +70,7 @@ class MessageHandler:
             logger.info(f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}")
             logger.info(f"Полные данные сообщения: {message_data}")
 
-            if user_id:
+            if user_id and username != "GroupAnonymousBot":
                 self.bot.db.check_username(user_id, username)
 
             self.bot.check_banwords(message_data)
@@ -377,8 +377,10 @@ class MessageHandler:
                 chat_id, "Вы успешно зарегистрированы!", reply_to_message_id=message_id
             )
 
+            display_name = username or f"id_{user_id}"
             self.bot.send_message(
-                self.bot.config.LOGGER_CHAT_ID, f"Новый пользователь: @{username}"
+                self.bot.config.LOGGER_CHAT_ID,
+                f"Новый пользователь: @{display_name}",
             )
         else:
             self.bot.send_message(
@@ -434,7 +436,8 @@ class MessageHandler:
 
         msg_lines = ["Список пользователей в этой группе:"]
         for user in users:
-            msg_lines.append(f"@{user.username} - {user.permission.to_string()}")
+            display_name = user.username or f"id_{user.tg_user_id}"
+            msg_lines.append(f"@{display_name} - {user.permission.to_string()}")
 
         self.bot.send_message(
             chat_id,
@@ -602,20 +605,35 @@ class MessageHandler:
         user_id = message_data["from"]["id"]
         text = message_data.get("text", "")
         msg_id = message_data.get("message_id")
+        reply = message_data.get("reply_to_message")
 
         parts = text.split()
-        if len(parts) != 3:
+        if reply and len(parts) == 2:
+            permission_str = parts[1]
+            target_id = (reply.get("from") or {}).get("id")
+            if not target_id:
+                self.bot.send_message(
+                    chat_id,
+                    "Не удалось определить пользователя из ответа",
+                    reply_to_message_id=msg_id,
+                )
+                return
+            target_user = self.bot.db.get_user(target_id, chat_id)
+        elif len(parts) == 3:
+            _, username, permission_str = parts
+
+            if username.startswith("@"):
+                username = username[1:]
+
+            target_user = self.bot.db.get_user_by_username(username, chat_id)
+        else:
             self.bot.send_message(
                 chat_id,
-                "Используйте: /set_permission [username] [permission]",
+                "Используйте: /set_permission [username] [permission] "
+                "или ответьте на сообщение: /set_permission [permission]",
                 reply_to_message_id=msg_id,
             )
             return
-
-        _, username, permission_str = parts
-
-        if username.startswith("@"):
-            username = username[1:]
 
         new_permission = PermissionLevel.from_string(permission_str)
         if new_permission is None:
@@ -626,10 +644,11 @@ class MessageHandler:
             )
             return
 
-        target_user = self.bot.db.get_user_by_username(username, chat_id)
         if not target_user:
             self.bot.send_message(chat_id, "Пользователь не найден", reply_to_message_id=msg_id)
             return
+
+        username = target_user.username or f"id_{target_user.tg_user_id}"
 
         current_user = self.bot.db.get_user(user_id, chat_id)
 

@@ -48,8 +48,20 @@ def migrate_comments_scheduled_unique(conn: sqlite3.Connection) -> None:
     )
 
 
+def migrate_empty_usernames_to_null(conn: sqlite3.Connection) -> None:
+    _exec_script(
+        conn,
+        """
+        UPDATE users
+        SET username = NULL
+        WHERE username = ''
+        """,
+    )
+
+
 MIGRATIONS: List[Migration] = [
     Migration(1, "comments_scheduled_unique", migrate_comments_scheduled_unique),
+    Migration(2, "empty_usernames_to_null", migrate_empty_usernames_to_null),
 ]
 
 

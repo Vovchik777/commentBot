@@ -46,6 +46,15 @@ def test_add_duplicate_user(db_manager, db_cursor, user_factory):
     assert db_cursor.fetchone()[0] == 1
 
 
+def test_add_two_users_without_usernames(db_manager, db_cursor, user_factory):
+    user = user_factory(username="")
+    assert db_manager.add_user(user)
+    assert db_manager.add_user(user_factory(username=user.username, tg_user_id=user.tg_user_id + 1))
+
+    db_cursor.execute("SELECT COUNT(*) FROM users WHERE username IS NULL")
+    assert db_cursor.fetchone()[0] == 2
+
+
 def test_update_user(db_manager, db_cursor, user_factory):
     user1 = user_factory(username="vova")
     user2 = user_factory(username="vova1232131")
@@ -111,6 +120,16 @@ def test_get_user_by_username_in_group_strip(db_manager, user_factory):
 
     assert isinstance(result, User)
     assert result.username == user.username
+    assert result.tg_user_id == user.tg_user_id
+
+
+def test_get_user_by_username_in_group_case_insensitive(db_manager, user_factory):
+    user = user_factory(username="vasya")
+    db_manager.add_user(user)
+
+    result = db_manager.get_user_by_username("VASYA", user.tg_group_id)
+
+    assert isinstance(result, User)
     assert result.tg_user_id == user.tg_user_id
 
 
@@ -378,3 +397,18 @@ def test_check_username_unknown_user(db_manager, db_cursor, user_factory):
 
     db_cursor.execute("SELECT username FROM users WHERE tg_user_id = ?", (user.tg_user_id,))
     assert db_cursor.fetchone()[0] == user.username
+
+
+def test_check_username_takes_over_stale_holder(db_manager, db_cursor, user_factory):
+    old_holder = user_factory(username="shared", tg_user_id=1)
+    new_holder = user_factory(username="other", tg_user_id=2)
+    db_manager.add_user(old_holder)
+    db_manager.add_user(new_holder)
+
+    db_manager.check_username(new_holder.tg_user_id, "shared")
+
+    db_cursor.execute("SELECT username FROM users WHERE tg_user_id = ?", (new_holder.tg_user_id,))
+    assert db_cursor.fetchone()[0] == "shared"
+
+    db_cursor.execute("SELECT username FROM users WHERE tg_user_id = ?", (old_holder.tg_user_id,))
+    assert db_cursor.fetchone()[0] is None
