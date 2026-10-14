@@ -13,6 +13,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
+        id: py
         with:
           python-version: "3.12"
           cache: pip
@@ -20,11 +21,21 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
+      - uses: actions/cache@v6
+        id: venv
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ steps.py.outputs.python-version }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+
+      - name: Создать venv
+        run: python -m venv .venv
+
       - name: Установка зависимостей
-        run: pip install -r requirements-dev.txt
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: .venv/bin/python -m pip install -r requirements-dev.txt
 
       - name: Тесты
-        run: python -m pytest -q -p no:cacheprovider
+        run: .venv/bin/python -m pytest -q -p no:cacheprovider
 
   lint:
     runs-on: ubuntu-latest
@@ -33,6 +44,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v7
+        id: py
         with:
           python-version: "3.12"
           cache: pip
@@ -40,14 +52,24 @@ jobs:
             requirements.txt
             requirements-dev.txt
 
+      - uses: actions/cache@v6
+        id: venv
+        with:
+          path: .venv
+          key: ${{ runner.os }}-venv-${{ steps.py.outputs.python-version }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+
+      - name: Создать venv
+        run: python -m venv .venv
+
       - name: Установка зависимостей
-        run: pip install -r requirements-dev.txt
+        if: steps.venv.outputs.cache-hit != 'true'
+        run: .venv/bin/python -m pip install -r requirements-dev.txt
 
       - name: Ruff lint
-        run: python -m ruff check . --output-format=github
+        run: .venv/bin/python -m ruff check . --output-format=github
 
       - name: Ruff format check
-        run: python -m ruff format --check .
+        run: .venv/bin/python -m ruff format --check .
 
   deploy:
     needs: test
