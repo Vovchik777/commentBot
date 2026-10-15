@@ -10,7 +10,7 @@ load_dotenv()
 class Config:
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
-    SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET", "default_secret")
+    SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET")
 
     BASE_URL: str = os.getenv("BASE_URL", "https://alicerasp.alwaysdata.net/tgbot")
 
@@ -20,7 +20,7 @@ class Config:
     IGNORING_CHAT_IDS: List[str] = field(default_factory=list)
 
     ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
-    ADMIN_PASS: str = os.getenv("ADMIN_PASS", "secure_pass")
+    ADMIN_PASS = os.getenv("ADMIN_PASS") or os.getenv("ADMIN_PASSWORD")
 
     TTL_ALBUM_PROCESSED: int = 3600
     TTL_BANWORDS: int = 300
@@ -34,7 +34,7 @@ class Config:
     def validate(cls):
 
         config = cls()
-        required = ["BOT_TOKEN", "LOGGER_CHAT_ID"]
+        required = ["BOT_TOKEN", "LOGGER_CHAT_ID", "SECRET_TOKEN", "ADMIN_PASS"]
         missing = [var for var in required if not getattr(config, var)]
         if missing:
             raise ValueError(f"Отсутствуют обязательные переменные окружения: {missing}")
