@@ -1,3 +1,4 @@
+import html
 import re
 import time
 import threading
@@ -58,14 +59,22 @@ class TelegramBot:
         reply_to_message_id: int = None,
         reply_markup: Optional[Dict] = None,
         parse_mode: str = "HTML",
+        escape: bool | dict | None = False,
     ) -> Optional[Dict]:
-        MAX_LENGHT = 4096
-        if len(text) <= MAX_LENGHT:
-            return self._send_single_message(
-                chat_id, text, reply_to_message_id, reply_markup, parse_mode
-            )
-        else:
-            return self._send_long_message(chat_id, text, reply_to_message_id, parse_mode)
+
+        max_len = self.config.TG_MSG_MAX_LENGHT
+
+        if escape is True:
+            text = html.escape(text)
+        elif isinstance(escape, dict):
+            text = text.format(**{k: html.escape(str(v)) for k, v in escape.items()})
+
+        if len(text) <= max_len:
+            return self._send_single_message(chat_id, text, reply_to_message_id, reply_markup, parse_mode)
+        if escape:
+
+            return {"ok": False, "error": "too_long"}
+        return self._send_long_message(chat_id, text, reply_to_message_id, parse_mode)
 
     def _send_single_message(
         self,
@@ -109,9 +118,10 @@ class TelegramBot:
         parts = []
         current_part = ""
         lines = text.split("\n")
+        max_len = self.config.TG_MSG_MAX_LENGHT
 
         for line in lines:
-            if len(current_part) + len(line) + 1 <= 4096:
+            if len(current_part) + len(line) + 1 <= max_len:
                 current_part += line + "\n"
             else:
                 if current_part:
@@ -167,9 +177,7 @@ class TelegramBot:
     def get_user_info(self, user_id: int) -> Dict[str, Any]:
         return self.get_chat_info(user_id)
 
-    def send_comment_to_message(
-        self, chat_id: int, message_id: int, is_media: bool = False
-    ) -> Optional[Dict]:
+    def send_comment_to_message(self, chat_id: int, message_id: int, is_media: bool = False) -> Optional[Dict]:
         try:
             comment_type = CommentTypes.PHOTO if is_media else CommentTypes.TEXT
 
@@ -189,17 +197,13 @@ class TelegramBot:
 
             self.db.update_use_count_comment(comment)
 
-            logger.info(
-                f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}"
-            )
+            logger.info(f"Отправка комментария в чат {chat_id}: {comment} -> {comment.comment_text}")
             return self.send_message(chat_id=chat_id, text=text, reply_to_message_id=message_id)
         except Exception as e:
             logger.error(f"Ошибка отправки комментария: {e}")
             return None
 
-    def _get_different_comment(
-        self, chat_id: int, comment_type: CommentTypes, current_comment: Comment
-    ) -> Comment:
+    def _get_different_comment(self, chat_id: int, comment_type: CommentTypes, current_comment: Comment) -> Comment:
         comments = self.comments_manager.get_comments_list(chat_id)
         available = comments.get(comment_type, [])
         if len(available) <= 1:

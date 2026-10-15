@@ -80,21 +80,21 @@ passenger_wsgi.py         # точка входа для alwaysdata (WSGI)
 | --- | :---: | --- | --- |
 | `BOT_TOKEN` | да | — | Токен бота от [@BotFather](https://t.me/BotFather) |
 | `LOGGER_CHAT_ID` | да | — | `chat_id` чата для логов и уведомлений |
-| `WEBHOOK_SECRET` | нет | `default_secret` | Секрет вебхука (`X-Telegram-Bot-Api-Secret-Token`) |
+| `WEBHOOK_SECRET` | да | — | Секрет вебхука (`X-Telegram-Bot-Api-Secret-Token`), ≥16 символов |
 | `BASE_URL` | нет | `https://alicerasp.alwaysdata.net/tgbot` | Базовый URL для вебхука и кнопок |
 | `DB_FILE` | нет | `storage/users.db` | Путь к файлу SQLite |
 | `ADMIN_USER` | нет | `admin` | Логин basic-auth веб-панели |
-| `ADMIN_PASS` | нет | `secure_pass` | Пароль basic-auth веб-панели |
+| `ADMIN_PASS` | да | — | Пароль basic-auth веб-панели |
 | `IGNORING_CHAT_IDS` | нет | — | `chat_id` через запятую, где бот не работает |
 
 ```ini
 BOT_TOKEN=123456:ABC...
 LOGGER_CHAT_ID=-1001234567890
-WEBHOOK_SECRET=change_me
+WEBHOOK_SECRET=change_me_to_random_string
 BASE_URL=https://example.alwaysdata.net/tgbot
 DB_FILE=storage/users.db
 ADMIN_USER=admin
-ADMIN_PASS=secure_pass
+ADMIN_PASS=change_me_to_strong_password
 ```
 
 ## Запуск
@@ -114,18 +114,22 @@ pip install -r requirements.txt
 python -m src.main     # http://localhost:8000
 ```
 
-Для работы через вебхук укажи публичный `BASE_URL` и вызови `GET /tgbot/setup` — он зарегистрирует вебхук и `secret_token` в Telegram.
+Для работы через вебхук укажи публичный `BASE_URL` и вызови `POST /tgbot/setup` — он зарегистрирует вебхук и `secret_token` в Telegram:
+
+```bash
+curl -X POST -u admin:пароль https://alicerasp.alwaysdata.net/tgbot/setup
+```
 
 ## HTTP-эндпоинты
 
 | Метод | Путь | Доступ | Назначение |
 | --- | --- | --- | --- |
 | `POST` | `/tgbot/webhook` | `X-Telegram-Bot-Api-Secret-Token` | Приём апдейтов от Telegram |
-| `GET` | `/tgbot/setup` | basic-auth | Установить вебхук |
-| `GET` | `/tgbot/status` | basic-auth | Статус вебхука (`getWebhookInfo`) |
+| `POST` | `/tgbot/setup` | basic-auth | Установить вебхук |
+| `GET` | `/tgbot/status` | basic-auth | Проверка статуса вебхука |
 | `GET` | `/tgbot/health` | открыт | Health-check |
 | `GET` | `/tgbot/date_picker` | открыт | Веб-календарь для планирования |
-| `GET`/`POST` | `/tgbot/admin_msg` | открыт | Форма обратной связи админу |
+| `GET`/`POST` | `/tgbot/admin_msg` | открыт | Форма обратной связи админу (rate-limit, honeypot, экранирование) |
 | `GET` | `/` | открыт | Информация о сервисе |
 
 ## Тесты

@@ -1,5 +1,6 @@
 from functools import wraps
 import hmac
+import time
 from flask import Flask, Response, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
@@ -20,6 +21,30 @@ bot = TelegramBot(config)
 
 ADMIN_USER = config.ADMIN_USER
 ADMIN_PASS = config.ADMIN_PASS
+
+ADMIN_MSG_RATE_LIMIT = 3
+ADMIN_MSG_RATE_WINDOW = 60
+_ADMIN_MSG_MAX_IPS = 1000
+_admin_msg_hits: dict = {}
+
+
+def _is_rate_limited(ip: str) -> bool:
+    now = time.time()
+    hits = [t for t in _admin_msg_hits.get(ip, []) if now - t < ADMIN_MSG_RATE_WINDOW]
+    if len(hits) >= ADMIN_MSG_RATE_LIMIT:
+        _admin_msg_hits[ip] = hits
+        return True
+
+    hits.append(now)
+    _admin_msg_hits[ip] = hits
+
+    if len(_admin_msg_hits) > _ADMIN_MSG_MAX_IPS:
+        for key in [
+            k for k, v in _admin_msg_hits.items() if not v or now - v[-1] > ADMIN_MSG_RATE_WINDOW
+        ]:
+            _admin_msg_hits.pop(key, None)
+
+    return False
 
 
 def require_admin(f):
@@ -67,7 +92,7 @@ def webhook():
         return jsonify({"status": "error"}), 500
 
 
-@app.route("/tgbot/setup", methods=["GET"])
+@app.route("/tgbot/setup", methods=["POST"])
 @require_admin
 def setup_webhook():
     """Установка вебхука"""
@@ -122,16 +147,38 @@ def get_admin_msg():
 
 @app.route("/tgbot/admin_msg", methods=["POST"])
 def send_admin_msg():
-    try:
-        data = request.get_json()
-        bot.send_message(
-            config.LOGGER_CHAT_ID,
-            f"<b>СООБЩЕНИЕ ДЛЯ АДМИНА</b>\n\nОт {data['name']} : \n {data['message']}",
-        )
+    ip = request.remote_addr or "unknown"
+    if _is_rate_limited(ip):
+        logger.warning(f"Rate limit для admin_msg с {ip}")
+        return jsonify(
+            {"status": "error", "message": "Слишком много запросов, попробуйте позже"}
+        ), 429
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        data = {}
+
+    # honeypot: поле скрыто от людей, боты его заполняют — молча игнорируем
+    if str(data.get("website", "")).strip():
         return jsonify({"status": "ok"})
-    except Exception as e:
-        logger.error("Ошибка при отправке сообщения админу")
-        return jsonify({"status": "error", "message": str(e)}), 500
+
+    message = str(data.get("message", "")).strip()
+    if not message:
+        return jsonify({"status": "error", "message": "Сообщение не может быть пустым"}), 400
+
+    result = bot.send_message(
+        config.LOGGER_CHAT_ID,
+        config.ADMIN_MSG_HEADER + "{message}",
+        escape={"message": message},
+    )
+
+    if not (result or {}).get("ok"):
+        if isinstance(result, dict) and result.get("error") == "too_long":
+            return jsonify({"status": "error", "message": "Сообщение слишком длинное"}), 400
+        logger.error(f"Ошибка при отправке сообщения админу: {result}")
+        return jsonify({"status": "error", "message": "Не удалось отправить сообщение"}), 500
+
+    return jsonify({"status": "ok"})
 
 
 @app.route("/")

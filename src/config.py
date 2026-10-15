@@ -11,6 +11,7 @@ class Config:
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
     SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET")
+    TG_MSG_MAX_LENGHT: int = 4096
 
     BASE_URL: str = os.getenv("BASE_URL", "https://alicerasp.alwaysdata.net/tgbot")
 
@@ -20,7 +21,10 @@ class Config:
     IGNORING_CHAT_IDS: List[str] = field(default_factory=list)
 
     ADMIN_USER: str = os.getenv("ADMIN_USER", "admin")
-    ADMIN_PASS = os.getenv("ADMIN_PASS") or os.getenv("ADMIN_PASSWORD")
+    ADMIN_PASS: str = os.getenv("ADMIN_PASS") or os.getenv("ADMIN_PASSWORD")
+
+    ADMIN_MSG_HEADER: str = "<b>СООБЩЕНИЕ АДМИНУ</b>\n\n"
+    ADMIN_MSG_MAX_LEN: int = TG_MSG_MAX_LENGHT
 
     TTL_ALBUM_PROCESSED: int = 3600
     TTL_BANWORDS: int = 300
@@ -38,3 +42,9 @@ class Config:
         missing = [var for var in required if not getattr(config, var)]
         if missing:
             raise ValueError(f"Отсутствуют обязательные переменные окружения: {missing}")
+
+        if len(config.SECRET_TOKEN) < 16:
+            raise ValueError("WEBHOOK_SECRET должен быть не короче 16 символов")
+
+        if config.ADMIN_PASS == "secure_pass":
+            raise ValueError("ADMIN_PASS не должен совпадать со старым дефолтом 'secure_pass'")
