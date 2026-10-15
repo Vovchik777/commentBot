@@ -1,4 +1,5 @@
 from functools import wraps
+import hmac
 from flask import Flask, Response, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
@@ -30,8 +31,10 @@ def require_admin(f):
         if not auth:
             return Response("Доступ защищён", 401, {"WWW-Authenticate": 'Basic realm="Admin Area"'})
 
-        # Если учётные данные переданы, но неверны → блокируем без повторного попапа
-        if auth.username != ADMIN_USER or auth.password != ADMIN_PASS:
+        username = (auth.username or "").encode()
+        password = (auth.password or "").encode()
+        ok = hmac.compare_digest(username, ADMIN_USER.encode())
+        if not ok or not hmac.compare_digest(password, ADMIN_PASS.encode()):
             return Response("Доступ запрещён: неверный логин или пароль", 403)
 
         return f(*args, **kwargs)
@@ -44,7 +47,10 @@ def webhook():
     logger.info("=== ПОЛУЧЕН ВЕБХУК ОТ TELEGRAM ===")
 
     secret_token = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-    if secret_token != config.SECRET_TOKEN:
+    if not hmac.compare_digest(
+        (secret_token or "").encode(),
+        (config.SECRET_TOKEN or "").encode(),
+    ):
         logger.warning("Неавторизованный запрос.")
         return "Unauthorized", 401
 
