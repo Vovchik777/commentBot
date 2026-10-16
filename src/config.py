@@ -10,7 +10,7 @@ load_dotenv()
 class Config:
     BOT_TOKEN: str = os.getenv("BOT_TOKEN")
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
-    SECRET_TOKEN: str = os.getenv("WEBHOOK_SECRET")
+    SECRET_TOKEN: str = os.getenv("SECRET_TOKEN")
     TG_MSG_MAX_LENGHT: int = 4096
 
     BASE_URL: str = os.getenv("BASE_URL", "https://alicerasp.alwaysdata.net/tgbot")
