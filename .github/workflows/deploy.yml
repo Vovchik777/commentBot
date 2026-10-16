@@ -74,6 +74,7 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Настройка SSH
         run: |
@@ -82,10 +83,22 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ssh-alicerasp.alwaysdata.net >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: git pull на сервере
+      - name: git pull на сервере и сверка коммита
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes alicerasp@ssh-alicerasp.alwaysdata.net \
-            "cd ~/commentBot && git pull --ff-only && python -m pip install -r requirements.txt --user"
+          output=$(ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes alicerasp@ssh-alicerasp.alwaysdata.net \
+            "cd ~/commentBot && git pull --ff-only && python -m pip install -r requirements.txt --user && echo REMOTE_SHA=\$(git rev-parse HEAD)")
+          echo "$output"
+          remote_sha=$(printf '%s\n' "$output" | sed -n 's/^REMOTE_SHA=//p' | tr -d '\r')
+          echo "Ожидался:  $EXPECTED_SHA"
+          echo "На сервере: $remote_sha"
+          if [ "$remote_sha" != "$EXPECTED_SHA" ]; then
+            echo "::error::Коммит на сервере не совпадает с запушенным"
+            exit 1
+          else
+            echo "Коммит на сервере совпадает с запушенным"
+          fi
 
       - name: Рестарт сайта через API
         run: |
@@ -94,3 +107,19 @@ jobs:
             --request POST https://api.alwaysdata.com/v1/site/987318/restart/)
           echo "HTTP $code"
           test "$code" = "204"
+
+      - name: Проверка, что сайт поднялся после рестарта
+        run: |
+          url="https://alicerasp.alwaysdata.net/tgbot/health"
+          for i in $(seq 1 36); do
+            code=$(curl --silent --show-error --output /tmp/health --write-out '%{http_code}' "$url" || true)
+            if [ "$code" = "200" ] && grep -q '"status"' /tmp/health; then
+              echo "Сайт отвечает (HTTP 200) с попытки $i"
+              cat /tmp/health
+              exit 0
+            fi
+            echo "Попытка $i: HTTP ${code:-нет ответа}, ждём…"
+            sleep 5
+          done
+          echo "::error::Сайт не ответил за отведённое время"
+          exit 1
