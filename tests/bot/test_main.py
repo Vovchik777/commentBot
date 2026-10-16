@@ -17,7 +17,7 @@ def main_module(tmp_path_factory):
     overrides = {
         "BOT_TOKEN": "123456:TESTTOKEN",
         "LOGGER_CHAT_ID": "0",
-        "WEBHOOK_SECRET": "test-webhook-secret-1234",
+        "SECRET_TOKEN": "test-webhook-secret-1234",
         "ADMIN_USER": "admin",
         "ADMIN_PASS": "test-admin-pass",
         "DB_FILE": str(db_dir / "main.db"),
