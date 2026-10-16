@@ -80,6 +80,14 @@
             text-transform: uppercase;
             letter-spacing: 1px;
         }
+        .error-message {
+            color: #ff5722;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+            font-size: 14px;
+            line-height: 1.5;
+        }
         .honeypot {
             position: absolute;
             left: -9999px;
@@ -106,9 +114,21 @@
         <div class="success-message" id="successMessage">
             Сообщение успешно отправлено!
         </div>
+        <div class="error-message" id="errorMessage"></div>
     </div>
 
     <script>
+        const successMessage = document.getElementById('successMessage');
+        const errorMessage = document.getElementById('errorMessage');
+
+        function show(element, text) {
+            element.textContent = text;
+            element.style.display = 'block';
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
         document.getElementById('messageForm').addEventListener('submit', function(e) {
             e.preventDefault();
 
@@ -118,27 +138,32 @@
                 data[key] = value;
             });
 
-            fetch('https://alicerasp.alwaysdata.net/tgbot/admin_msg', {
+            fetch('/tgbot/admin_msg', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(data),
             })
-            .then(response => {
-                if (response.ok) {
+            .then(response => response.json().catch(() => ({})))
+            .then(body => {
+                if (body && body.status === 'ok') {
                     document.getElementById('messageForm').reset();
-                    document.getElementById('successMessage').style.display = 'block';
-                    setTimeout(() => {
-                        document.getElementById('successMessage').style.display = 'none';
-                    }, 3000);
+                    show(successMessage, 'Сообщение успешно отправлено!');
                 } else {
-                    alert('Ошибка при отправке сообщения');
+                    show(
+                        errorMessage,
+                        (body && body.message) ||
+                            'Не удалось отправить сообщение. Пожалуйста, попробуйте ещё раз чуть позже.'
+                    );
                 }
             })
             .catch(error => {
                 console.error('Ошибка:', error);
-                alert('Ошибка при отправке сообщения');
+                show(
+                    errorMessage,
+                    'Не удалось отправить сообщение. Пожалуйста, попробуйте ещё раз чуть позже.'
+                );
             });
         });
     </script>
