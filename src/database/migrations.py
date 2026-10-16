@@ -59,9 +59,26 @@ def migrate_empty_usernames_to_null(conn: sqlite3.Connection) -> None:
     )
 
 
+def migrate_admin_msg_rate_limits(conn: sqlite3.Connection) -> None:
+    _exec_script(
+        conn,
+        """
+        CREATE TABLE IF NOT EXISTS admin_msg_rate_limits (
+            ip TEXT NOT NULL,
+            ts REAL NOT NULL,
+            expires_at REAL NOT NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_admin_msg_rl_expires ON admin_msg_rate_limits(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_admin_msg_rl_ip_ts ON admin_msg_rate_limits(ip, ts);
+        """,
+    )
+
+
 MIGRATIONS: List[Migration] = [
     Migration(1, "comments_scheduled_unique", migrate_comments_scheduled_unique),
     Migration(2, "empty_usernames_to_null", migrate_empty_usernames_to_null),
+    Migration(3, "admin_msg_rate_limits", migrate_admin_msg_rate_limits),
 ]
 
 

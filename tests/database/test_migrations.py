@@ -110,6 +110,30 @@ def test_text_dedup_unchanged(comments_manager):
     assert comments_manager.add_comment(duplicate) is False
 
 
+def test_empty_usernames_migration_to_null(temp_db_path):
+    with sqlite3.connect(temp_db_path) as conn:
+        conn.execute(
+            """
+            CREATE TABLE users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE,
+                tg_user_id INTEGER UNIQUE
+            )
+            """
+        )
+        conn.execute("INSERT INTO users (username, tg_user_id) VALUES ('', 1)")
+
+    DataBaseManager(temp_db_path)
+
+    conn = sqlite3.connect(temp_db_path)
+    try:
+        row = conn.execute("SELECT username FROM users WHERE tg_user_id=1").fetchone()
+    finally:
+        conn.close()
+
+    assert row[0] is None
+
+
 def test_failed_migration_rolls_back(temp_db_path):
     conn = sqlite3.connect(temp_db_path)
     try:

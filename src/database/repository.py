@@ -108,6 +108,9 @@ class DataBaseManager:
                         conn.execute("DELETE FROM processed_albums WHERE expires_at < ?", (now,))
                         conn.execute("DELETE FROM banwords_cache WHERE expires_at < ?", (now,))
                         conn.execute(
+                            "DELETE FROM admin_msg_rate_limits WHERE expires_at < ?", (now,)
+                        )
+                        conn.execute(
                             """DELETE FROM comments WHERE comment_type = 'scheduled' AND scheduled_date < ?""",
                             (get_moscow_date(),),
                         )
@@ -529,6 +532,30 @@ class DataBaseManager:
                 (chat_id, text, time.time()),
             )
             conn.commit()
+
+    def admin_msg_rate_hit(self, ip: str) -> bool:
+        """Фиксирует запрос с IP. True — лимит превышен, запрос нужно отклонить."""
+        now = time.time()
+        window = config.ADMIN_MSG_RATE_WINDOW
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            conn.execute(
+                "DELETE FROM admin_msg_rate_limits WHERE ip = ? AND ts <= ?",
+                (ip, now - window),
+            )
+            count = conn.execute(
+                "SELECT COUNT(*) FROM admin_msg_rate_limits WHERE ip = ?",
+                (ip,),
+            ).fetchone()[0]
+            if count >= config.ADMIN_MSG_RATE_LIMIT:
+                conn.commit()
+                return True
+
+            conn.execute(
+                "INSERT INTO admin_msg_rate_limits (ip, ts, expires_at) VALUES (?, ?, ?)",
+                (ip, now, now + window),
+            )
+            conn.commit()
+            return False
 
     @staticmethod
     def _row_to_comment(row: sqlite3.Row) -> Comment:

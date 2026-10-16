@@ -48,3 +48,21 @@ def test_banwords_table_created_with_unique_on_group_and_pattern(db_manager, db_
 
     assert row is not None
     assert "UNIQUE(group_id, pattern)" in row[0]
+
+
+def test_admin_msg_rate_limits_table_created(db_manager, db_cursor):
+    row = db_cursor.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='admin_msg_rate_limits'"
+    ).fetchone()
+
+    assert row is not None
+    assert "expires_at REAL NOT NULL" in row[0]
+
+
+def test_admin_msg_rate_limits_indexes_created(db_manager, db_cursor):
+    rows = db_cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='admin_msg_rate_limits'"
+    ).fetchall()
+
+    names = {row[0] for row in rows}
+    assert {"idx_admin_msg_rl_expires", "idx_admin_msg_rl_ip_ts"} <= names

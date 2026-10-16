@@ -25,6 +25,8 @@ class Config:
 
     ADMIN_MSG_HEADER: str = "<b>СООБЩЕНИЕ АДМИНУ</b>\n\n"
     ADMIN_MSG_MAX_LEN: int = TG_MSG_MAX_LENGHT
+    ADMIN_MSG_RATE_LIMIT: int = 3
+    ADMIN_MSG_RATE_WINDOW: int = 60
 
     TTL_ALBUM_PROCESSED: int = 3600
     TTL_BANWORDS: int = 300

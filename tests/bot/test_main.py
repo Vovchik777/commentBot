@@ -1,5 +1,6 @@
 import base64
 import os
+import sqlite3
 import sys
 
 import pytest
@@ -47,7 +48,12 @@ def main_module(tmp_path_factory):
 
 @pytest.fixture
 def client(main_module):
-    main_module._admin_msg_hits.clear()
+    conn = sqlite3.connect(main_module.config.DB_FILE)
+    try:
+        conn.execute("DELETE FROM admin_msg_rate_limits")
+        conn.commit()
+    finally:
+        conn.close()
     return main_module.application.test_client()
 
 
@@ -133,7 +139,7 @@ def test_admin_msg_too_long(main_module, client, monkeypatch):
 
 
 def test_admin_msg_rate_limited(client, sent, main_module):
-    for _ in range(main_module.ADMIN_MSG_RATE_LIMIT):
+    for _ in range(main_module.config.ADMIN_MSG_RATE_LIMIT):
         assert client.post("/tgbot/admin_msg", json={"message": "hi"}).status_code == 200
     response = client.post("/tgbot/admin_msg", json={"message": "hi"})
     assert response.status_code == 429
