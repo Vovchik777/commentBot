@@ -83,7 +83,8 @@ def setup_webhook():
     }
 
     logger.info(f"Устанавливаем вебхук: {webhook_url}")
-    response = requests.post(url, json=payload)
+    response = requests.post(url, json=payload, timeout=config.TG_API_RESPONSE_TIMEOUT)
+    response.raise_for_status()
     result = response.json()
     logger.info(f"Результат: {result}")
 
@@ -98,7 +99,8 @@ def webhook_status():
 
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/getWebhookInfo"
 
-    response = requests.get(url)
+    response = requests.get(url, timeout=config.TG_API_RESPONSE_TIMEOUT)
+    response.raise_for_status()
     result = response.json()
     logger.info(f"Статус вебхука: {result}")
 
@@ -125,15 +127,18 @@ def send_admin_msg():
     ip = request.remote_addr or "unknown"
     if bot.db.admin_msg_rate_hit(ip):
         logger.warning(f"Rate limit для admin_msg с {ip}")
-        return jsonify(
-            {
-                "status": "error",
-                "message": (
-                    "Вы отправили слишком много сообщений. "
-                    "Пожалуйста, немного подождите и попробуйте снова."
-                ),
-            }
-        ), 429
+        return (
+            jsonify(
+                {
+                    "status": "error",
+                    "message": (
+                        "Вы отправили слишком много сообщений. "
+                        "Пожалуйста, немного подождите и попробуйте снова."
+                    ),
+                }
+            ),
+            429,
+        )
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
@@ -157,22 +162,28 @@ def send_admin_msg():
 
     if not (result or {}).get("ok"):
         if isinstance(result, dict) and result.get("error") == "too_long":
-            return jsonify(
+            return (
+                jsonify(
+                    {
+                        "status": "error",
+                        "message": (
+                            "Сообщение получилось слишком длинным. "
+                            "Пожалуйста, сократите его и отправьте снова."
+                        ),
+                    }
+                ),
+                400,
+            )
+        logger.error(f"Ошибка при отправке сообщения админу: {result}")
+        return (
+            jsonify(
                 {
                     "status": "error",
-                    "message": (
-                        "Сообщение получилось слишком длинным. "
-                        "Пожалуйста, сократите его и отправьте снова."
-                    ),
+                    "message": "Не удалось отправить сообщение. Пожалуйста, попробуйте ещё раз чуть позже.",
                 }
-            ), 400
-        logger.error(f"Ошибка при отправке сообщения админу: {result}")
-        return jsonify(
-            {
-                "status": "error",
-                "message": "Не удалось отправить сообщение. Пожалуйста, попробуйте ещё раз чуть позже.",
-            }
-        ), 500
+            ),
+            500,
+        )
 
     return jsonify({"status": "ok"})
 

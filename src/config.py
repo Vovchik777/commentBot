@@ -12,8 +12,9 @@ class Config:
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
     SECRET_TOKEN: str = os.getenv("SECRET_TOKEN")
     TG_MSG_MAX_LENGHT: int = 4096
+    TG_API_RESPONSE_TIMEOUT: int = 15
 
-    BASE_URL: str = os.getenv("BASE_URL", "https://alicerasp.alwaysdata.net/tgbot")
+    BASE_URL: str = os.getenv("BASE_URL")
 
     DB_FILE: str = os.getenv("DB_FILE", "storage/users.db")
     DB_CONNECTION_TIMEOUT: int = 10
@@ -40,7 +41,7 @@ class Config:
     def validate(cls):
 
         config = cls()
-        required = ["BOT_TOKEN", "LOGGER_CHAT_ID", "SECRET_TOKEN", "ADMIN_PASS"]
+        required = ["BOT_TOKEN", "LOGGER_CHAT_ID", "SECRET_TOKEN", "ADMIN_PASS", "BASE_URL"]
         missing = [var for var in required if not getattr(config, var)]
         if missing:
             raise ValueError(f"Отсутствуют обязательные переменные окружения: {missing}")

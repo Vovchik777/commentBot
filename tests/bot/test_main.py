@@ -20,6 +20,7 @@ def main_module(tmp_path_factory):
         "SECRET_TOKEN": "test-webhook-secret-1234",
         "ADMIN_USER": "admin",
         "ADMIN_PASS": "test-admin-pass",
+        "BASE_URL": "http://test.local/tgbot",
         "DB_FILE": str(db_dir / "main.db"),
     }
     saved = {k: os.environ.get(k) for k in overrides}
