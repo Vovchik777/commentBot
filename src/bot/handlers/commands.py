@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 from src.database.models import PermissionLevel, User, CommentTypes, Comment
 from src.bot.utils.permissions import required_permission
@@ -14,6 +14,7 @@ class MessageHandler:
         self.help_msg = self._create_help_message()
 
         self.private_commands = {
+            "/start": self.handle_start,
             "/help": self.handle_help,
             "/admin_msg": self.handle_admin_msg,
             "/answer": self.handle_answer,
@@ -21,6 +22,7 @@ class MessageHandler:
         }
 
         self.group_commands = {
+            "/start": self.handle_start,
             "/help": self.handle_help,
             "/admin_msg": self.handle_admin_msg,
             "/register": self.handle_register,
@@ -52,6 +54,12 @@ class MessageHandler:
             f"/answer [text] - уникальная команда - доступно от {PermissionLevel.LOGGER.to_string()}"
         )
 
+    def _parse_command(self, text: str) -> Optional[str]:
+        if not text or not text.startswith("/"):
+            return None
+        first_word = text.split(None, 1)[0]
+        return first_word.split("@", 1)[0].lower()
+
     def process_message(self, message_data: Dict[str, Any]) -> None:
         logger.info("Начало обработки сообщения")
 
@@ -75,10 +83,6 @@ class MessageHandler:
 
             self.bot.check_banwords(message_data)
 
-            if text == "/start":
-                self.handle_start(message_data)
-                return
-
             if chat_type in ["group", "supergroup"]:
                 self.handle_group_message(message_data)
 
@@ -87,6 +91,33 @@ class MessageHandler:
 
         except Exception as e:
             logger.error(f"Ошибка обработки сообщения: {e}")
+
+    def handle_command(self, message_data: Dict[str, Any]) -> bool:
+        text = message_data.get("text") or ""
+        chat_type = message_data.get("chat", {}).get("type", "")
+
+        name = self._parse_command(text)
+        if name is None:
+            return False
+
+        handler = self.private_commands.get(name) or self.group_commands.get(name)
+        if handler is None:
+            return False
+
+        if chat_type == "private":
+            if name not in self.private_commands:
+                self.bot.send_message(
+                    message_data["chat"]["id"],
+                    "не могу выполнить в лс",
+                    reply_to_message_id=message_data["message_id"],
+                )
+                return True
+        elif name not in self.group_commands:
+            return False
+
+        logger.info(f"Вызвана команда: {name}")
+        handler(message_data)
+        return True
 
     @required_permission(PermissionLevel.BASE)
     def handle_start(self, message_data: Dict[str, Any]) -> None:
@@ -124,29 +155,11 @@ class MessageHandler:
         if not (str(chat_id) == self.bot.config.LOGGER_CHAT_ID):
             self._log_private_message(message_data)
 
-        self.handle_private_commands(message_data)
+        self.handle_command(message_data)
 
         if text and not text.startswith("/"):
             text = "мармелад" if "мармелад" not in text.lower().strip() else "нет"
             self.bot.send_message(chat_id, text, reply_to_message_id=message_id)
-
-    def handle_private_commands(self, message_data: Dict[str, Any]) -> None:
-        text = message_data.get("text", "")
-
-        for cmd, handler in self.private_commands.items():
-            if text.startswith(cmd):
-                if cmd in self.private_commands.keys():
-                    logger.info(f"Вызвана команда: {cmd}")
-                    handler(message_data)
-                    return
-
-        for cmd in self.group_commands.keys():
-            if text.startswith(cmd):
-                self.bot.send_message(
-                    message_data["chat"]["id"],
-                    "не могу выполнить в лс",
-                    reply_to_message_id=message_data["message_id"],
-                )
 
     def handle_group_message(self, message_data: Dict[str, Any]) -> None:
         logger.info("Обработка сообщения в группе")
@@ -163,20 +176,11 @@ class MessageHandler:
         text = message_data.get("text", "")
 
         if text.startswith("/"):
-            self.handle_group_commands(message_data)
+            self.handle_command(message_data)
             return
 
         if is_forwarded:
             self.bot.handle_forwarded_message(message_data)
-
-    def handle_group_commands(self, message_data: Dict[str, Any]) -> None:
-        text = message_data.get("text", "")
-
-        for cmd, handler in self.group_commands.items():
-            if text.startswith(cmd):
-                logger.info(f"Вызвана команда: {cmd}")
-                handler(message_data)
-                return
 
     def _log_private_message(self, message_data: Dict[str, Any]) -> None:
         from src.shared.time_utils import get_moscow_datetime_str
@@ -238,6 +242,7 @@ class MessageHandler:
                     reply_to = int(list(log_entry.keys())[0])
         except Exception as e:
             logger.error(f"Ошибка при логировании сообщения: {e}")
+            return
 
         log_message = (
             f"{channel_text}\n"
@@ -283,7 +288,7 @@ class MessageHandler:
                     [
                         {
                             "text": "БАГ РЕПОРТ",
-                            "url": "https://t.me/tvoyatec_bot/admin_msg",
+                            "url": f"{self.bot.config.BASE_URL}/admin_msg",
                         }
                     ]
                 ]
@@ -321,7 +326,7 @@ class MessageHandler:
                     [
                         {
                             "text": "БАГ РЕПОРТ",
-                            "url": "https://t.me/tvoyatec_bot/admin_msg",
+                            "url": f"{self.bot.config.BASE_URL}/admin_msg",
                         }
                     ]
                 ]
