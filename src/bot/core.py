@@ -148,18 +148,24 @@ class TelegramBot:
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=10)
-            if response.status_code == 429:
-                retry_after = response.json().get("parameters", {}).get("retry_after", 5)
-                logger.warning(f"Rate limit exceeded. Waiting {retry_after} seconds.")
-                time.sleep(retry_after)
-                return self.set_message_reaction(chat_id, message_id, emoji)
+            tries = 0
+            while tries < 3:
+                tries += 1
+                response = requests.post(url, json=payload, timeout=10)
+                if response.status_code == 429:
+                    retry_after = response.json().get("parameters", {}).get("retry_after", 5)
+                    logger.warning(f"Rate limit exceeded. Waiting {retry_after} seconds.")
+                    time.sleep(retry_after)
+                    continue
 
-            response.raise_for_status()
-            result = response.json()
-            if result.get("ok"):
-                logger.info(f"Реакция установлена на сообщение {message_id} в чате {chat_id}")
-            return result
+                response.raise_for_status()
+                result = response.json()
+                if result.get("ok"):
+                    logger.info(f"Реакция установлена на сообщение {message_id} в чате {chat_id}")
+                return result
+            else:
+                raise requests.exceptions.RequestException("Rate limit exceeded")
+
         except requests.exceptions.RequestException as e:
             logger.error(f"Ошибка установки реакции: {e}")
             return {"ok": False, "error": str(e)}
