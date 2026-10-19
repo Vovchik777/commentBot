@@ -1,14 +1,18 @@
 name: deploy
 
 on:
-
   push:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -16,16 +20,12 @@ jobs:
         id: py
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
 
       - uses: actions/cache@v6
         id: venv
         with:
           path: .venv
-          key: ${{ runner.os }}-venv-${{ steps.py.outputs.python-version }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
+          key: ${{ runner.os }}-venv-${{ steps.py.outputs.python-version }}-${{ hashFiles('requirements*.txt') }}
 
       - name: Создать venv
         run: python -m venv .venv
@@ -37,38 +37,14 @@ jobs:
       - name: Тесты
         run: .venv/bin/python -m pytest -q -p no:cacheprovider
 
-  lint:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: actions/setup-python@v7
-        id: py
-        with:
-          python-version: "3.12"
-          cache: pip
-          cache-dependency-path: |
-            requirements.txt
-            requirements-dev.txt
-
-      - uses: actions/cache@v6
-        id: venv
-        with:
-          path: .venv
-          key: ${{ runner.os }}-venv-${{ steps.py.outputs.python-version }}-${{ hashFiles('requirements.txt', 'requirements-dev.txt') }}
-
-      - name: Создать venv
-        run: python -m venv .venv
-
-      - name: Установка зависимостей
-        if: steps.venv.outputs.cache-hit != 'true'
-        run: .venv/bin/python -m pip install -r requirements-dev.txt
-
       - name: Ruff lint
+        if: ${{ !cancelled() }}
+        continue-on-error: true
         run: .venv/bin/python -m ruff check . --output-format=github
 
       - name: Ruff format check
+        if: ${{ !cancelled() }}
+        continue-on-error: true
         run: .venv/bin/python -m ruff format --check .
 
   deploy:
@@ -88,7 +64,10 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           output=$(ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes alicerasp@ssh-alicerasp.alwaysdata.net \
-            "cd ~/commentBot && git pull --ff-only && python -m pip install -r requirements.txt --user && echo REMOTE_SHA=\$(git rev-parse HEAD)")
+            "cd ~/commentBot && OLD_SHA=\$(git rev-parse HEAD) && git pull --ff-only && NEW_SHA=\$(git rev-parse HEAD) && \
+             if [ \"\$OLD_SHA\" != \"\$NEW_SHA\" ] && git diff --name-only \"\$OLD_SHA\" \"\$NEW_SHA\" -- requirements.txt | grep -q .; then \
+               python -m pip install -r requirements.txt --user; \
+             fi && echo REMOTE_SHA=\$NEW_SHA")
           echo "$output"
           remote_sha=$(printf '%s\n' "$output" | sed -n 's/^REMOTE_SHA=//p' | tr -d '\r')
           echo "Ожидался:  $EXPECTED_SHA"
@@ -102,16 +81,19 @@ jobs:
 
       - name: Рестарт сайта через API
         run: |
-          code=$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' \
+          body=$(mktemp)
+          code=$(curl --silent --show-error --output "$body" --write-out '%{http_code}' \
+            --retry 3 --retry-all-errors --retry-delay 2 \
             --basic --user "${{ secrets.ALWAYSDATA_API_KEY }} account=alicerasp:" \
             --request POST https://api.alwaysdata.com/v1/site/987318/restart/)
           echo "HTTP $code"
+          cat "$body"
           test "$code" = "204"
 
       - name: Проверка, что сайт поднялся после рестарта
         run: |
           url="https://alicerasp.alwaysdata.net/tgbot/health"
-          for i in $(seq 1 36); do
+          for i in $(seq 1 90); do
             code=$(curl --silent --show-error --output /tmp/health --write-out '%{http_code}' "$url" || true)
             if [ "$code" = "200" ] && grep -q '"status"' /tmp/health; then
               echo "Сайт отвечает (HTTP 200) с попытки $i"
@@ -119,7 +101,7 @@ jobs:
               exit 0
             fi
             echo "Попытка $i: HTTP ${code:-нет ответа}, ждём…"
-            sleep 5
+            sleep 2
           done
           echo "::error::Сайт не ответил за отведённое время"
           exit 1
