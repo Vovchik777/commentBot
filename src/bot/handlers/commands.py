@@ -66,8 +66,6 @@ class MessageHandler:
         try:
             chat_data = message_data.get("chat") or {}
             from_data = message_data.get("from") or {}
-            logger.info(f"{chat_data=}")
-            logger.info(f"{from_data=}")
 
             chat_id = chat_data.get("id")
             user_id = from_data.get("id")
@@ -75,8 +73,10 @@ class MessageHandler:
             text = message_data.get("text", " ")
             chat_type = chat_data.get("type", "")
 
-            logger.info(f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}")
-            logger.info(f"Полные данные сообщения: {message_data}")
+            logger.debug(f"{chat_data=}")
+            logger.debug(f"{from_data=}")
+            logger.debug(f"Обработка сообщения: чат {chat_id}, тип {chat_type}, текст: {text}")
+            logger.debug(f"Полные данные сообщения: {message_data}")
 
             if user_id and username != "GroupAnonymousBot":
                 self.bot.db.check_username(user_id, username)
@@ -194,19 +194,12 @@ class MessageHandler:
 
         log_message = f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text}]"
 
-        reply_to = (
-            int(
-                list(
-                    self.bot.logs_manager.get_bot_message_info(
-                        message_data.get("reply_to_message", {}).get("message_id", {})
-                    ).keys()
-                )[0]
-            )
-            if self.bot.logs_manager.get_bot_message_info(
-                message_data.get("reply_to_message", {}).get("message_id", {})
-            )
-            else None
+        reply_to = None
+        log_entry = self.bot.logs_manager.get_bot_message_info(
+            message_data.get("reply_to_message", {}).get("message_id", {})
         )
+        if log_entry:
+            reply_to = int(list(log_entry.keys())[0])
 
         msg_result = self.bot.send_message(self.bot.config.LOGGER_CHAT_ID, log_message, reply_to)
 
@@ -348,8 +341,7 @@ class MessageHandler:
         user_id = message_data["from"]["id"]
         message_id = message_data["message_id"]
 
-        chat_info = self.bot.get_chat_info(user_id)
-        username = chat_info.get("username", "")
+        username = message_data["from"].get("username", "")
 
         group_users = self.bot.db.get_users_in_group(chat_id)
 
