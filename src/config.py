@@ -12,7 +12,7 @@ class Config:
     LOGGER_CHAT_ID: str = os.getenv("LOGGER_CHAT_ID")
     SECRET_TOKEN: str = os.getenv("SECRET_TOKEN")
     TG_MSG_MAX_LENGHT: int = 4096
-    TG_API_RESPONSE_TIMEOUT: int = 15
+    TG_API_REQUEST_TIMEOUT: int = 15
 
     BASE_URL: str = os.getenv("BASE_URL")
 
@@ -38,16 +38,22 @@ class Config:
 
     @classmethod
     # @staticmethod
-    def validate(cls):
+    def validate(cls, scope = "web"):
 
         config = cls()
-        required = ["BOT_TOKEN", "LOGGER_CHAT_ID", "SECRET_TOKEN", "ADMIN_PASS", "BASE_URL"]
+        required = ["BOT_TOKEN", "LOGGER_CHAT_ID"]
+        if scope == "web":
+            required += ["SECRET_TOKEN", "ADMIN_PASS", "BASE_URL"]
+        elif scope == "cron":
+            required += ["DB_FILE"]
+
         missing = [var for var in required if not getattr(config, var)]
         if missing:
             raise ValueError(f"Отсутствуют обязательные переменные окружения: {missing}")
 
-        if len(config.SECRET_TOKEN) < 16:
-            raise ValueError("WEBHOOK_SECRET должен быть не короче 16 символов")
+        if scope == "web":
+            if len(config.SECRET_TOKEN) < 16:
+                raise ValueError("SECRET_TOKEN должен быть не короче 16 символов")
 
-        if config.ADMIN_PASS == "secure_pass":
-            raise ValueError("ADMIN_PASS не должен совпадать со старым дефолтом 'secure_pass'")
+            if config.ADMIN_PASS == "secure_pass":
+                raise ValueError("ADMIN_PASS не должен совпадать с дефолтом 'secure_pass'")

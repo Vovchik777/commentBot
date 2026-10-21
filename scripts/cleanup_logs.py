@@ -1,9 +1,8 @@
-import os
+
 import pytz
 import requests
 
 moscow_tz = pytz.timezone("Europe/Moscow")
-import json
 import sys, os
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -15,7 +14,7 @@ logger = get_cron_logger()
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 cfg = Config()
-cfg.validate()
+cfg.validate(scope="cron")
 
 
 def cleanup_task():
@@ -41,8 +40,16 @@ def cleanup_task():
                     "chat_id": LOGGER_CHAT_ID,
                     "text": f"удалено {keys_to_remove} старых логов\nОсталось {len(logged_msgs)}",
                 }
-                requests.post(url, json=payload)
-                logger.info("уведомление отправлено в логгер чат")
+                try:
+                        response = requests.post(url, json=payload, timeout=cfg.TG_API_REQUEST_TIMEOUT)
+                        response.raise_for_status()
+                        logger.info("уведомление отправлено в логгер чат")
+                        
+                
+                except requests.exceptions.Timeout:
+                    logger.error("Таймаут запроса к апи тг")
+                except Exception as e:
+                    logger.error(f"ошибка при запросе к апи тг {e}")
 
             else:
                 logger.warning("не удалось отправить уведомление в логгер чат: отсутствует токен или ID")

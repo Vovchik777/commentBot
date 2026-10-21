@@ -15,6 +15,8 @@ from src.shared.time_utils import get_moscow_datetime_str
 from .handlers.commands import MessageHandler
 from src.shared.logger import get_bot_logger
 
+from src.bot.utils.text_wrapper import split_text
+
 logger = get_bot_logger()
 
 
@@ -116,28 +118,21 @@ class TelegramBot:
         reply_to_message_id: Optional[int],
         parse_mode: str,
     ) -> List[Dict]:
-        parts = []
-        current_part = ""
-        lines = text.split("\n")
         max_len = self.config.TG_MSG_MAX_LENGHT
 
-        for line in lines:
-            if len(current_part) + len(line) + 1 <= max_len:
-                current_part += line + "\n"
-            else:
-                if current_part:
-                    parts.append(current_part.strip())
-                current_part = line + "\n"
-        if current_part:
-            parts.append(current_part.strip())
+        chunks = split_text(text, max_len)
 
         results = []
-        for i, part in enumerate(parts):
+        for i, part in enumerate(chunks, 1):
             result = self._send_single_message(chat_id, part, reply_to_message_id, None, parse_mode)
             results.append(result)
-            if i < len(parts) - 1:
+            if i < len(chunks):
                 time.sleep(0.3)
         return results
+             
+    
+
+        
 
     def set_message_reaction(self, chat_id: int, message_id: int, emoji: str = "🗿") -> Dict:
         url = f"{self.base_url}/setMessageReaction"

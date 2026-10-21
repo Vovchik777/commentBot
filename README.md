@@ -80,8 +80,8 @@ passenger_wsgi.py         # точка входа для alwaysdata (WSGI)
 | --- | :---: | --- | --- |
 | `BOT_TOKEN` | да | — | Токен бота от [@BotFather](https://t.me/BotFather) |
 | `LOGGER_CHAT_ID` | да | — | `chat_id` чата для логов и уведомлений |
-| `WEBHOOK_SECRET` | да | — | Секрет вебхука (`X-Telegram-Bot-Api-Secret-Token`), ≥16 символов |
-| `BASE_URL` | нет | `https://alicerasp.alwaysdata.net/tgbot` | Базовый URL для вебхука и кнопок |
+| `SECRET_TOKEN` | да | — | Секрет вебхука (`X-Telegram-Bot-Api-Secret-Token`), ≥16 символов |
+| `BASE_URL` | да | — | Базовый URL для вебхука и кнопок |
 | `DB_FILE` | нет | `storage/users.db` | Путь к файлу SQLite |
 | `ADMIN_USER` | нет | `admin` | Логин basic-auth веб-панели |
 | `ADMIN_PASS` | да | — | Пароль basic-auth веб-панели |

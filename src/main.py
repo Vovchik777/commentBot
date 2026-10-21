@@ -82,13 +82,39 @@ def setup_webhook():
         "allowed_updates": ["message", "edited_message"],
     }
 
-    logger.info(f"Устанавливаем вебхук: {webhook_url}")
-    response = requests.post(url, json=payload, timeout=config.TG_API_RESPONSE_TIMEOUT)
-    response.raise_for_status()
-    result = response.json()
-    logger.info(f"Результат: {result}")
+    try:
+        logger.info(f"Устанавливаем вебхук: {webhook_url}")
 
-    return jsonify(result)
+        response = requests.post(url, json=payload, timeout=config.TG_API_REQUEST_TIMEOUT)
+        response.raise_for_status()
+        result = response.json()
+        logger.info(f"Результат: {result}")
+
+        return jsonify(result)
+
+    except requests.exceptions.Timeout:
+        logger.error("Таймаут запроса к апи тг")
+        return jsonify({"ok" : False,
+                        "error_code": 504,
+                        "description" : f"Gateway Timeout: Telegram API didn`t respond at {config.TG_API_REQUEST_TIMEOUT} sec"
+                        })
+
+    except Exception as e:
+        logger.error(f"ошибка при запросе к апи тг {e}")
+
+        if getattr(e, "response", None) is not None:
+            try:
+                return jsonify(e.response.json()), e.response.status_code
+            except ValueError:
+                pass
+
+        return jsonify({
+            "ok": False,
+            "error_code": 502,
+            "description": f"Bad Gateway: {str(e)}"
+        }), 502
+
+
 
 
 @app.route("/tgbot/status", methods=["GET"])
@@ -99,7 +125,7 @@ def webhook_status():
 
     url = f"https://api.telegram.org/bot{config.BOT_TOKEN}/getWebhookInfo"
 
-    response = requests.get(url, timeout=config.TG_API_RESPONSE_TIMEOUT)
+    response = requests.get(url, timeout=config.TG_API_REQUEST_TIMEOUT)
     response.raise_for_status()
     result = response.json()
     logger.info(f"Статус вебхука: {result}")
@@ -124,7 +150,7 @@ def get_admin_msg():
 
 @app.route("/tgbot/admin_msg", methods=["POST"])
 def send_admin_msg():
-    ip = request.remote_addr or "unknown"
+    ip = request.headers.get("X-Forwarded-For") or request.remote_addr
     if bot.db.admin_msg_rate_hit(ip):
         logger.warning(f"Rate limit для admin_msg с {ip}")
         return (
