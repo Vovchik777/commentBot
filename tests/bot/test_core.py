@@ -111,3 +111,21 @@ def test_reaction_api_ok_false_passes_through(bot, http):
 
     assert result == {"ok": False, "description": "bad"}
     assert len(http.calls) == 1
+
+
+def test_send_message_escape_dict_ignores_stray_braces(bot, http):
+    # str.format на таком шаблоне бросал KeyError/IndexError, сообщение не уходило вовсе
+    http.responses = [FakeResponse(200, {"ok": True})]
+
+    result = bot.send_message(1, "{} {x} {message}", escape={"message": "<b>"})
+
+    assert result["ok"] is True
+    assert http.calls[0]["text"] == "{} {x} &lt;b&gt;"
+
+
+def test_send_message_escape_dict_keeps_template_markup(bot, http):
+    http.responses = [FakeResponse(200, {"ok": True})]
+
+    bot.send_message(1, "<b>{name}</b>", escape={"name": "a&b"})
+
+    assert http.calls[0]["text"] == "<b>a&amp;b</b>"
