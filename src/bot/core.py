@@ -15,7 +15,7 @@ from src.shared.time_utils import get_moscow_datetime_str
 from .handlers.commands import MessageHandler
 from src.shared.logger import get_bot_logger
 
-from src.bot.utils.text_wrapper import split_text
+from src.bot.utils.text import split_text, fill_placeholders
 
 logger = get_bot_logger()
 
@@ -69,7 +69,7 @@ class TelegramBot:
         if escape is True:
             text = html.escape(text)
         elif isinstance(escape, dict):
-            text = text.format(**{k: html.escape(str(v)) for k, v in escape.items()})
+            text = fill_placeholders(text, escape)
 
         if len(text) <= max_len:
             return self._send_single_message(
