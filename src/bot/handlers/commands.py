@@ -1,3 +1,4 @@
+from html import escape
 from typing import Dict, Any, Optional
 
 from src.database.models import PermissionLevel, User, CommentTypes, Comment
@@ -140,7 +141,7 @@ class MessageHandler:
         banwords = self.bot.comments_manager.get_banwords_list(chat_id)
         msg = ""
         for banword in banwords:
-            msg += f"<b>{banword.pattern}</b> - {banword.reply}\n"
+            msg += f"<b>{escape(banword.pattern)}</b> - {escape(banword.reply)}\n"
 
         if msg:
             self.bot.send_message(chat_id, msg, reply_to_message_id=message_data["message_id"])
@@ -468,9 +469,9 @@ class MessageHandler:
                 raw = comment.comment_text
                 parsed = self.bot.comments_manager.parse_comment_template(raw)
                 if parsed != raw:
-                    msg_lines.append(f"{num}. {raw} ( {parsed} )")
+                    msg_lines.append(f"{num}. {escape(raw)} ( {escape(parsed)} )")
                 else:
-                    msg_lines.append(f"{num}. {raw}")
+                    msg_lines.append(f"{num}. {escape(raw)}")
                 num += 1
         num = 1
         photo_comments = group_comments.get(CommentTypes.PHOTO.value, [])
@@ -480,9 +481,9 @@ class MessageHandler:
                 raw = comment.comment_text
                 parsed = self.bot.comments_manager.parse_comment_template(raw)
                 if parsed != raw:
-                    msg_lines.append(f"{num}. {raw} ( {parsed} )")
+                    msg_lines.append(f"{num}. {escape(raw)} ( {escape(parsed)} )")
                 else:
-                    msg_lines.append(f"{num}. {raw}")
+                    msg_lines.append(f"{num}. {escape(raw)}")
                 num += 1
         num = 1
         scheduled_comments = group_comments.get(CommentTypes.SCHEDULED.value, {})
@@ -492,7 +493,7 @@ class MessageHandler:
             for date, comments in scheduled_comments.items():
                 msg_lines.append(f"{date}".center(30, "-"))
                 for comment in comments:
-                    msg_lines.append(f"  {num}. {comment.comment_text}")
+                    msg_lines.append(f"  {num}. {escape(comment.comment_text)}")
                     num += 1
 
         if msg_lines:
@@ -541,7 +542,7 @@ class MessageHandler:
         if success:
             self.bot.send_message(
                 chat_id,
-                f"Добавлен {comment_type.value}-комментарий: {comment_text}",
+                f"Добавлен {comment_type.value}-комментарий: {escape(comment_text)}",
                 reply_to_message_id=msg_id,
             )
         else:
@@ -586,7 +587,7 @@ class MessageHandler:
         if deleted_comment:
             self.bot.send_message(
                 chat_id,
-                f"Комментарий №{index} ({deleted_comment.comment_text}) удален",
+                f"Комментарий №{index} ({escape(deleted_comment.comment_text)}) удален",
                 reply_to_message_id=msg_id,
             )
         else:
@@ -727,7 +728,7 @@ class MessageHandler:
         if success:
             self.bot.send_message(
                 chat_id,
-                f"Комментарий ```{comment_text}``` добавлен на дату {date}",
+                f"Комментарий <code>{escape(comment_text)}</code> добавлен на дату {date}",
                 reply_to_message_id=msg_id,
             )
         else:
@@ -744,7 +745,7 @@ class MessageHandler:
             "inline_keyboard": [
                 [
                     {
-                        "text": "СООЩЕНИЕ АДМИНУ",
+                        "text": "СООБЩЕНИЕ АДМИНУ",
                         "url": f"{self.bot.config.BASE_URL}/admin_msg",
                     }
                 ]
