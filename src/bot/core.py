@@ -20,6 +20,15 @@ from src.bot.utils.text import split_text, fill_placeholders
 logger = get_bot_logger()
 
 
+def _is_parse_entities_error(response) -> bool:
+    """Telegram вернул 400 из-за невалидного HTML в тексте."""
+    try:
+        description = response.json().get("description", "")
+    except Exception:
+        return False
+    return "can't parse entities" in str(description).lower()
+
+
 class TelegramBot:
     def __init__(self, config: Config):
         self.config = config
@@ -97,6 +106,12 @@ class TelegramBot:
 
         try:
             response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 400 and _is_parse_entities_error(response):
+                # страховка: кривая HTML-разметка не должна терять сообщение —
+                # повторяем отправку без разметки, текст дойдёт как есть
+                logger.warning(f"Telegram не разобрал HTML в чате {chat_id}, повтор без parse_mode")
+                payload = {key: value for key, value in payload.items() if key != "parse_mode"}
+                response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
             result = response.json()
             if result.get("ok"):
