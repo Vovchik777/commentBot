@@ -59,12 +59,16 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ssh-alicerasp.alwaysdata.net >> ~/.ssh/known_hosts 2>/dev/null
 
-      - name: git pull на сервере и сверка коммита
+      - name: Синхронизация сервера с main и сверка коммита
         env:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
+          # reset --hard, а не pull --ff-only: после force-push в main история
+          # переписана, и fast-forward невозможен (git pull падает с кодом 128).
+          # Сервер — зеркало main: локальные правки tracked-файлов отбрасываются,
+          # untracked-файлы reset не трогает.
           output=$(ssh -i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes alicerasp@ssh-alicerasp.alwaysdata.net \
-            "cd ~/commentBot && OLD_SHA=\$(git rev-parse HEAD) && git pull --ff-only && NEW_SHA=\$(git rev-parse HEAD) && \
+            "cd ~/commentBot && OLD_SHA=\$(git rev-parse HEAD) && git fetch --prune origin main && git reset --hard origin/main && NEW_SHA=\$(git rev-parse HEAD) && \
              if [ \"\$OLD_SHA\" != \"\$NEW_SHA\" ] && git diff --name-only \"\$OLD_SHA\" \"\$NEW_SHA\" -- requirements.txt | grep -q .; then \
                python -m pip install -r requirements.txt --user; \
              fi && echo REMOTE_SHA=\$NEW_SHA")
