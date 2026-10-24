@@ -9,12 +9,27 @@ from src.database.models import Comment, CommentTypes, PermissionLevel, User
 from src.shared.time_utils import get_moscow_date
 
 
+class FakeLogsManager:
+    def __init__(self):
+        self.entries = []
+
+    def get_bot_message_info(self, message_id):
+        return {}
+
+    def add_message_log(self, bot_msg_id, chat_id, message_id, text):
+        self.entries.append({"bot_msg_id": bot_msg_id, "chat_id": chat_id, "text": text})
+
+
 class FakeBot:
     def __init__(self, db, config):
         self.db = db
         self.config = config
         self.comments_manager = CommentsManager(db)
+        self.logs_manager = FakeLogsManager()
         self.calls = []
+
+    def get_chat_info(self, chat_id):
+        return {}
 
     def send_message(
         self,
@@ -25,7 +40,14 @@ class FakeBot:
         parse_mode="HTML",
         escape=False,
     ):
-        self.calls.append({"text": text, "escape": escape, "reply_markup": reply_markup})
+        self.calls.append(
+            {
+                "chat_id": chat_id,
+                "text": text,
+                "escape": escape,
+                "reply_markup": reply_markup,
+            }
+        )
         return {"ok": True, "result": {"message_id": len(self.calls)}}
 
     @property
@@ -130,3 +152,27 @@ def test_admin_msg_button_typo_fixed(env):
 
     button = bot.calls[-1]["reply_markup"]["inline_keyboard"][0][0]
     assert button["text"] == "СООБЩЕНИЕ АДМИНУ"
+
+
+def test_log_group_message_escapes_and_stores(env):
+    bot, handler = env
+    message = _msg(-100, 999, "a < b & <b>жо<па</b>")
+    message["sender_chat"] = {"id": -100, "title": "Чат <&>", "type": "supergroup"}
+
+    handler._log_group_message(message, False)
+
+    sent = bot.calls[-1]["text"]
+    assert bot.calls[-1]["chat_id"] == bot.config.LOGGER_CHAT_ID
+    assert "Чат &lt;&amp;&gt;" in sent
+    assert "a &lt; b &amp; &lt;b&gt;жо&lt;па&lt;/b&gt;" in sent
+    # запись в логи сохранена, иначе /answer не найдёт это сообщение
+    assert bot.logs_manager.entries
+
+
+def test_log_private_message_escapes_text(env):
+    bot, handler = env
+
+    handler._log_private_message(_msg(-100, 999, "a < b & c"))
+
+    assert "a &lt; b &amp; c" in bot.calls[-1]["text"]
+    assert bot.logs_manager.entries

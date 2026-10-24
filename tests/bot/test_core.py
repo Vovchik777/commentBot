@@ -129,3 +129,29 @@ def test_send_message_escape_dict_keeps_template_markup(bot, http):
     bot.send_message(1, "<b>{name}</b>", escape={"name": "a&b"})
 
     assert http.calls[0]["text"] == "<b>a&amp;b</b>"
+
+
+def test_send_message_retries_without_parse_mode_on_entities_error(bot, http):
+    http.responses = [
+        FakeResponse(400, {"ok": False, "description": "Bad Request: can't parse entities"}),
+        FakeResponse(200, {"ok": True}),
+    ]
+
+    result = bot.send_message(1, "<b>жо<па</b>")
+
+    assert result["ok"] is True
+    assert len(http.calls) == 2
+    assert "parse_mode" in http.calls[0]
+    assert "parse_mode" not in http.calls[1]
+    assert http.calls[1]["text"] == "<b>жо<па</b>"
+
+
+def test_send_message_does_not_retry_on_other_400(bot, http):
+    http.responses = [
+        FakeResponse(400, {"ok": False, "description": "Bad Request: chat not found"})
+    ]
+
+    result = bot.send_message(1, "text")
+
+    assert result["ok"] is False
+    assert len(http.calls) == 1
