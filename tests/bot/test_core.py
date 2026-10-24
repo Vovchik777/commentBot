@@ -32,7 +32,7 @@ def http(monkeypatch):
     state = SimpleNamespace(responses=[], calls=[], sleeps=[])
 
     def fake_post(url, json=None, timeout=None):
-        state.calls.append(json)
+        state.calls.append(dict(json))
         if not state.responses:
             raise AssertionError("неожиданный HTTP-вызов")
         resp = state.responses.pop(0)
@@ -131,8 +131,25 @@ def test_send_message_escape_dict_keeps_template_markup(bot, http):
     assert http.calls[0]["text"] == "<b>a&amp;b</b>"
 
 
-def test_send_message_retries_without_parse_mode_on_entities_error(bot, http):
+def test_send_message_repairs_markup_on_entities_error(bot, http):
     http.responses = [
+        FakeResponse(400, {"ok": False, "description": "Bad Request: can't parse entities"}),
+        FakeResponse(200, {"ok": True}),
+    ]
+
+    result = bot.send_message(1, "<b>по<па</b>")
+
+    assert result["ok"] is True
+    assert len(http.calls) == 2
+    assert http.calls[0]["text"] == "<b>по<па</b>"
+    # второй запрос — уже починенный текст, разметка сохранена
+    assert http.calls[1]["text"] == "<b>по&lt;па</b>"
+    assert http.calls[1]["parse_mode"] == "HTML"
+
+
+def test_send_message_falls_back_to_plain_if_repair_failed(bot, http):
+    http.responses = [
+        FakeResponse(400, {"ok": False, "description": "Bad Request: can't parse entities"}),
         FakeResponse(400, {"ok": False, "description": "Bad Request: can't parse entities"}),
         FakeResponse(200, {"ok": True}),
     ]
@@ -140,10 +157,12 @@ def test_send_message_retries_without_parse_mode_on_entities_error(bot, http):
     result = bot.send_message(1, "<b>жо<па</b>")
 
     assert result["ok"] is True
-    assert len(http.calls) == 2
+    assert len(http.calls) == 3
     assert "parse_mode" in http.calls[0]
-    assert "parse_mode" not in http.calls[1]
-    assert http.calls[1]["text"] == "<b>жо<па</b>"
+    assert "parse_mode" in http.calls[1]
+    assert "parse_mode" not in http.calls[2]
+    # plain-отправка идёт уже починенным текстом — тегов там нет, отображается как есть
+    assert http.calls[2]["text"] == "<b>жо&lt;па</b>"
 
 
 def test_send_message_does_not_retry_on_other_400(bot, http):
