@@ -15,7 +15,7 @@ from src.shared.time_utils import get_moscow_datetime_str
 from .handlers.commands import MessageHandler
 from src.shared.logger import get_bot_logger
 
-from src.bot.utils.text import split_text, fill_placeholders
+from src.bot.utils.text import split_text, fill_placeholders, sanitize_telegram_html
 
 logger = get_bot_logger()
 
@@ -106,6 +106,14 @@ class TelegramBot:
 
         try:
             response = requests.post(url, json=payload, timeout=10)
+            if response.status_code == 400 and _is_parse_entities_error(response):
+                # ремонт разметки: битые теги не должны убивать валидные.
+                # Если после ремонта текст длиннее лимита — сразу plain-текст.
+                repaired = sanitize_telegram_html(text)
+                if repaired != text and len(repaired) <= self.config.TG_MSG_MAX_LENGHT:
+                    logger.warning(f"Исправлена HTML-разметка в чате {chat_id}, повтор с разметкой")
+                    payload = {**payload, "text": repaired}
+                    response = requests.post(url, json=payload, timeout=10)
             if response.status_code == 400 and _is_parse_entities_error(response):
                 # страховка: кривая HTML-разметка не должна терять сообщение —
                 # повторяем отправку без разметки, текст дойдёт как есть
