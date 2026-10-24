@@ -193,7 +193,9 @@ class MessageHandler:
         chat_info = self.bot.get_chat_info(chat_id)
         username = chat_info.get("username", "неизвестно")
 
-        log_message = f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text}]"
+        log_message = (
+            f"[{get_moscow_datetime_str()} : @{escape(username)} ({chat_id}), {escape(text)}]"
+        )
 
         reply_to = None
         log_entry = self.bot.logs_manager.get_bot_message_info(
@@ -224,7 +226,7 @@ class MessageHandler:
             channel_info = self._get_forwarded_channel_info(message_data)
             group_type = "ГРУППЫ" if not is_forwared else "КАНАЛА"
             channel_text = (
-                f"СООБЩЕНИЕ ИЗ {group_type} {channel_info}"
+                f"СООБЩЕНИЕ ИЗ {group_type} {escape(channel_info)}"
                 if channel_info
                 else f"СООБЩЕНИЕ ИЗ {group_type}"
             )
@@ -240,7 +242,8 @@ class MessageHandler:
 
         log_message = (
             f"{channel_text}\n"
-            f"[{get_moscow_datetime_str()} : @{username} ({chat_id}), {text or caption or 'нет текста'}]"
+            f"[{get_moscow_datetime_str()} : @{escape(username)} ({chat_id}), "
+            f"{escape(text or caption or 'нет текста')}]"
         )
         logger.info(f"{log_message=}")
 
