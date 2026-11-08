@@ -262,7 +262,10 @@
         button.disabled = true;
         button.textContent = "…";
         try {
-            const response = await fetch(url, { method: method, headers: { Accept: "application/json" } });
+            const response = await fetch(window.adminUrl(url), {
+                method: method,
+                headers: { Accept: "application/json" },
+            });
             let body = await response.text();
             try { body = JSON.stringify(JSON.parse(body), null, 2); } catch (error) { /* не JSON */ }
             showConsole("[" + label + "] HTTP " + response.status + "\n" + body);

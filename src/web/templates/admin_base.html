@@ -376,8 +376,16 @@
                 }
             );
         };
+        window.adminUrl = function (url) {
+            // location.origin не содержит логин/пароль, в отличие от адреса документа,
+            // открытого как http://admin:pass@host/ — fetch с credentials в URL падает TypeError.
+            return new URL(url, window.location.origin).href;
+        };
         window.adminGetJSON = async function (url) {
-            const response = await fetch(url, { headers: { Accept: "application/json" }, cache: "no-store" });
+            const response = await fetch(window.adminUrl(url), {
+                headers: { Accept: "application/json" },
+                cache: "no-store",
+            });
             if (!response.ok) {
                 throw new Error("HTTP " + response.status);
             }
