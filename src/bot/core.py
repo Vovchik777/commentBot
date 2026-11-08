@@ -152,10 +152,6 @@ class TelegramBot:
             if i < len(chunks):
                 time.sleep(0.3)
         return results
-             
-    
-
-        
 
     def set_message_reaction(self, chat_id: int, message_id: int, emoji: str = "🗿") -> Dict:
         url = f"{self.base_url}/setMessageReaction"

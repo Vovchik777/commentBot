@@ -1,0 +1,77 @@
+{% extends "admin_base.html" %}
+{% block title %}Банворды{% endblock %}
+{% block crumbs %}admin / банворды{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Банворды</h1>
+        <p>Регулярные выражения, на которые бот отвечает в группе.</p>
+    </div>
+</div>
+
+{% if group_id is none %}
+<div class="card empty">В базе ещё нет групп.</div>
+{% else %}
+<div class="group-switch">
+    {% for g in groups %}
+    <a href="{{ url_for('admin.banwords_page', group=g) }}" class="{{ 'active' if g == group_id else '' }}">{{ g }}</a>
+    {% endfor %}
+</div>
+
+<article class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+        <div>
+            <h2>Добавить банворд</h2>
+            <span class="muted">паттерн проверяется регулярным выражением Python</span>
+        </div>
+    </div>
+    <form method="post" action="{{ url_for('admin.add_banword') }}">
+        <input type="hidden" name="group" value="{{ group_id }}">
+        <div class="form-row">
+            <div class="field field--wide">
+                <label for="pattern">Паттерн</label>
+                <input type="text" name="pattern" id="pattern" required placeholder="например: казино|ставки">
+            </div>
+            <div class="field field--wide">
+                <label for="reply">Ответ бота</label>
+                <input type="text" name="reply" id="reply" required placeholder="Текст ответа">
+            </div>
+        </div>
+        <button type="submit">Добавить</button>
+    </form>
+</article>
+
+<article class="card">
+    <div class="card-head">
+        <h2>Список</h2>
+        <span class="pill">{{ banwords | length }}</span>
+    </div>
+    {% if not banwords %}
+    <div class="empty">Пусто.</div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>#</th><th>Паттерн</th><th>Ответ</th><th></th></tr></thead>
+            <tbody>
+                {% for b in banwords %}
+                <tr>
+                    <td class="muted">{{ loop.index }}</td>
+                    <td class="mono"><code>{{ b.pattern }}</code></td>
+                    <td class="mono">{{ b.reply }}</td>
+                    <td style="text-align: right;">
+                        <form method="post" action="{{ url_for('admin.delete_banword') }}">
+                            <input type="hidden" name="group" value="{{ group_id }}">
+                            <input type="hidden" name="pattern" value="{{ b.pattern }}">
+                            <button type="submit" class="danger small"
+                                    onclick="return confirm('Удалить банворд {{ b.pattern }}?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+{% endif %}
+{% endblock %}

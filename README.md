@@ -67,8 +67,9 @@ src/
     migrations.py         # самописные миграции схемы
     models.py             # User, Comment, Banword, PermissionLevel, CommentTypes
   shared/                 # logger, time_utils (Europe/Moscow)
-  web/templates/          # date_pick.html, admin_msg.html
-tests/                    # pytest: database + services + handlers
+  web/                    # auth.py, admin.py (blueprint /admin)
+  web/templates/          # admin_*.html, date_pick.html, admin_msg.html
+tests/                    # pytest: database + services + handlers + web
 passenger_wsgi.py         # точка входа для alwaysdata (WSGI)
 ```
 
@@ -131,6 +132,24 @@ curl -X POST -u admin:пароль https://alicerasp.alwaysdata.net/tgbot/setup
 | `GET` | `/tgbot/date_picker` | открыт | Веб-календарь для планирования |
 | `GET`/`POST` | `/tgbot/admin_msg` | открыт | Форма обратной связи админу (rate-limit, honeypot, экранирование) |
 | `GET` | `/` | открыт | Информация о сервисе |
+
+## Админ-панель
+
+Доступна по `/admin/` под basic-auth (`ADMIN_USER` / `ADMIN_PASS`). Страницы:
+
+| Путь | Что показывает |
+| --- | --- |
+| `/admin/` | дашборд: KPI, график активности за 24 ч, диаграммы по группам (обновление каждые 7 с) |
+| `/admin/users` | пользователи и права по группам, поиск по `@username`/id |
+| `/admin/comments` | текстовые, фото- и запланированные комментарии, добавление и удаление |
+| `/admin/banwords` | банворды группы, проверка regex при добавлении |
+| `/admin/logs` | `message_logs` за 24 ч, автообновление каждые 5 с |
+| `/admin/api/stats`, `/admin/api/logs` | JSON для живого обновления страниц |
+| `/admin/export.json` | выгрузка users/comments/banwords/logs одним файлом |
+
+POST-формы защищены сверкой `Origin`/`Referer` с `BASE_URL` (CSRF), ответы отдаются с
+`Cache-Control: no-store`, `X-Frame-Options: DENY`. UI — тёмный, без внешних CDN:
+графики рисуются SVG/JS на стороне браузера, поэтому панель работает и без интернета.
 
 ## Тесты
 

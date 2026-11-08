@@ -80,6 +80,11 @@ class CommentsManager:
         self._banwords_ram[group_id] = (expires_at, banwords)
         return banwords
 
+    def invalidate_banwords(self, group_id: int) -> None:
+        """Сбрасывает SQLite-кэш и RAM-кэш банвордов группы."""
+        self.db.invalidate_banwords_cache(group_id)
+        self._banwords_ram.pop(group_id, None)
+
     def add_banword(self, group_id: int, pattern: str, reply: str) -> bool:
         try:
             re.compile(pattern)
@@ -89,8 +94,7 @@ class CommentsManager:
 
         added = self.db.add_banword(group_id, pattern, reply)
         if added:
-            self.db.invalidate_banwords_cache(group_id)
-            self._banwords_ram.pop(group_id, None)
+            self.invalidate_banwords(group_id)
         return added
 
     def get_valid_banwords(self, group_id: int) -> List[Banword]:

@@ -1,0 +1,311 @@
+{% extends "admin_base.html" %}
+{% block title %}Дашборд{% endblock %}
+{% block crumbs %}admin / дашборд{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Дашборд</h1>
+        <p>Метрики бота по группам — обновляются автоматически.</p>
+    </div>
+    <span class="live" id="live-badge"><span class="dot"></span><span id="live-text">live</span></span>
+</div>
+
+<section class="kpi-grid">
+    <article class="kpi">
+        <span class="label">Группы</span>
+        <b data-total="groups">{{ totals.groups }}</b>
+        <small>подключено к боту</small>
+    </article>
+    <article class="kpi kpi--cyan">
+        <span class="label">Пользователи</span>
+        <b data-total="users">{{ totals.users }}</b>
+        <small>во всех группах</small>
+    </article>
+    <article class="kpi kpi--violet">
+        <span class="label">Комментарии</span>
+        <b data-total="comments">{{ totals.comments }}</b>
+        <small>текст + фото + план</small>
+    </article>
+    <article class="kpi kpi--green">
+        <span class="label">Банворды</span>
+        <b data-total="banwords">{{ totals.banwords }}</b>
+        <small>активных паттернов</small>
+    </article>
+    <article class="kpi kpi--yellow">
+        <span class="label">Использований</span>
+        <b data-total="use_count">{{ totals.use_count }}</b>
+        <small>отправлено комментариев</small>
+    </article>
+    <article class="kpi kpi--red">
+        <span class="label">Логи 24ч</span>
+        <b data-total="logs">{{ totals.logs }}</b>
+        <small>записей message_logs</small>
+    </article>
+</section>
+
+<div class="dash-top">
+    <article class="card">
+        <div class="card-head">
+            <div>
+                <h2>Активность за 24 часа</h2>
+                <span class="muted">записанные сообщения по часам (МСК)</span>
+            </div>
+            <span class="pill">{{ totals.logs }} всего</span>
+        </div>
+        {% set max_activity = (activity | map(attribute='count') | max) or 1 %}
+        <div class="activity" id="activity">
+            {% for item in activity %}
+            <div class="bar" style="height: {{ [((item.count / max_activity) * 100) | round(1), 3] | max }}%;"
+                 title="{{ item.label }} — {{ item.count }}"></div>
+            {% endfor %}
+        </div>
+        <div class="activity-axis">
+            <span id="axis-start">{{ activity[0].label if activity else '' }}</span>
+            <span id="axis-mid">{{ activity[activity | length // 2].label if activity else '' }}</span>
+            <span id="axis-end">{{ activity[-1].label if activity else '' }}</span>
+        </div>
+    </article>
+
+    <article class="card">
+        <div class="card-head">
+            <div>
+                <h2>Служебное</h2>
+                <span class="muted">вебхук Telegram и выгрузка</span>
+            </div>
+        </div>
+        <div class="toolbar">
+            <button type="button" class="ghost" id="wh-status">Статус вебхука</button>
+            <button type="button" id="wh-setup">Установить вебхук</button>
+            <a class="btn ghost" href="{{ url_for('admin.export_json') }}">Скачать JSON</a>
+        </div>
+        <pre class="console" id="wh-result" hidden></pre>
+        <p class="hint">
+            Установка дергает <span class="mono">POST {{ config.BASE_URL or '' }}/tgbot/setup</span>,
+            статус — <span class="mono">GET /tgbot/status</span>. Под капотом basic-auth.
+        </p>
+    </article>
+</div>
+
+<div class="page-head" style="margin-bottom: 14px;">
+    <div><h2>Группы</h2><p class="muted" style="margin: 4px 0 0;">Разбивка контента и действий по каждой группе.</p></div>
+</div>
+
+{% if not stats %}
+<div class="card empty">В базе ещё нет групп — бот добавит их автоматически при первом сообщении.</div>
+{% else %}
+<section class="group-grid" id="groups">
+    {% for s in stats %}
+    <article class="card group-card" data-group-card data-group="{{ s.group_id }}"
+             data-text="{{ s.text }}" data-photo="{{ s.photo }}" data-scheduled="{{ s.scheduled }}">
+        <div class="card-head">
+            <div>
+                <h2>Группа {{ s.group_id }}</h2>
+                <span class="muted">telegram chat id</span>
+            </div>
+            <span class="pill pill--accent" data-field="users">{{ s.users }} участн.</span>
+        </div>
+        <div class="group-body">
+            <div class="donut-wrap" data-donut></div>
+            <div class="mini-stats">
+                <div><span>Текстовые</span><b data-field="text">{{ s.text }}</b></div>
+                <div><span>Фото</span><b data-field="photo">{{ s.photo }}</b></div>
+                <div><span>Запланировано</span><b data-field="scheduled">{{ s.scheduled }}</b></div>
+                <div><span>Банворды</span><b data-field="banwords">{{ s.banwords }}</b></div>
+                <div><span>Использований</span><b data-field="use_count">{{ s.use_count }}</b></div>
+                <div><span>Пользователи</span><b data-field="users_count">{{ s.users }}</b></div>
+            </div>
+            <div class="legend" data-legend></div>
+        </div>
+        <div class="card-actions">
+            <a class="btn small" href="{{ url_for('admin.comments_page', group=s.group_id) }}">Комментарии</a>
+            <a class="btn ghost small" href="{{ url_for('admin.banwords_page', group=s.group_id) }}">Банворды</a>
+        </div>
+    </article>
+    {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const COLORS = { text: "#ff6b35", photo: "#22d3ee", scheduled: "#a78bfa" };
+    const PERIOD = 7000;
+
+    function donutSVG(text, photo, scheduled) {
+        const total = text + photo + scheduled;
+        const radius = 15.9155;
+        const circle = 2 * Math.PI * radius;
+        let rings = "";
+        if (!total) {
+            rings = '<circle cx="21" cy="21" r="' + radius + '" fill="none" stroke="rgba(148,163,184,.18)" stroke-width="5"/>';
+        } else {
+            let offset = 0;
+            [[text, COLORS.text], [photo, COLORS.photo], [scheduled, COLORS.scheduled]].forEach(function (pair) {
+                const value = pair[0];
+                if (!value) { return; }
+                const length = (value / total) * circle;
+                rings += '<circle cx="21" cy="21" r="' + radius + '" fill="none" stroke="' + pair[1] +
+                    '" stroke-width="5" stroke-dasharray="' + length + " " + (circle - length) +
+                    '" stroke-dashoffset="' + (-offset) + '" transform="rotate(-90 21 21)"/>';
+                offset += length;
+            });
+        }
+        return '<svg viewBox="0 0 42 42">' + rings +
+            '<text class="donut-center" x="21" y="20.5">' + window.adminFmt.format(total) + '</text>' +
+            '<text class="donut-center-sub" x="21" y="25">коммент.</text></svg>';
+    }
+
+    function legendHTML(text, photo, scheduled) {
+        return [
+            ["Текст", text, COLORS.text],
+            ["Фото", photo, COLORS.photo],
+            ["План", scheduled, COLORS.scheduled]
+        ].map(function (row) {
+            return '<div class="legend-item"><span class="legend-swatch" style="background:' + row[2] + '"></span>' +
+                row[0] + '<b>' + window.adminFmt.format(row[1]) + '</b></div>';
+        }).join("");
+    }
+
+    function updateCard(card, group) {
+        card.dataset.text = group.text;
+        card.dataset.photo = group.photo;
+        card.dataset.scheduled = group.scheduled;
+        const fields = {
+            text: group.text,
+            photo: group.photo,
+            scheduled: group.scheduled,
+            banwords: group.banwords,
+            use_count: group.use_count,
+            users_count: group.users
+        };
+        Object.keys(fields).forEach(function (name) {
+            const node = card.querySelector('[data-field="' + name + '"]');
+            if (node) { node.textContent = window.adminFmt.format(fields[name]); }
+        });
+        const usersPill = card.querySelector('[data-field="users"]');
+        if (usersPill) { usersPill.textContent = window.adminFmt.format(group.users) + " участн."; }
+        const donut = card.querySelector("[data-donut]");
+        if (donut) { donut.innerHTML = donutSVG(group.text, group.photo, group.scheduled); }
+        const legend = card.querySelector("[data-legend]");
+        if (legend) { legend.innerHTML = legendHTML(group.text, group.photo, group.scheduled); }
+    }
+
+    function updateTotals(totals) {
+        Object.keys(totals).forEach(function (name) {
+            const node = document.querySelector('[data-total="' + name + '"]');
+            if (node) { node.textContent = window.adminFmt.format(totals[name]); }
+        });
+    }
+
+    function updateActivity(activity) {
+        const container = document.getElementById("activity");
+        if (!container) { return; }
+        const max = Math.max.apply(null, activity.map(function (item) { return item.count; }).concat([1]));
+        container.innerHTML = activity.map(function (item) {
+            const height = Math.max((item.count / max) * 100, 2);
+            return '<div class="bar" style="height:' + height + '%" title="' + window.adminEsc(item.label) +
+                " — " + item.count + '"></div>';
+        }).join("");
+        const start = document.getElementById("axis-start");
+        const mid = document.getElementById("axis-mid");
+        const end = document.getElementById("axis-end");
+        if (activity.length) {
+            if (start) { start.textContent = activity[0].label; }
+            if (mid) { mid.textContent = activity[Math.floor(activity.length / 2)].label; }
+            if (end) { end.textContent = activity[activity.length - 1].label; }
+        }
+    }
+
+    function setLive(ok, text) {
+        const badge = document.getElementById("live-badge");
+        const label = document.getElementById("live-text");
+        if (label && text) { label.textContent = text; }
+        if (badge) {
+            badge.classList.toggle("live--off", !ok);
+            const dot = badge.querySelector(".dot");
+            if (dot) { dot.classList.toggle("dot--off", !ok); }
+        }
+    }
+
+    async function refresh() {
+        try {
+            const stats = await window.adminGetJSON("{{ url_for('admin.api_stats') }}");
+            updateTotals(stats.totals);
+            updateActivity(stats.activity || []);
+            const cards = document.querySelectorAll("[data-group-card]");
+            if (cards.length !== stats.groups.length) {
+                window.location.reload();
+                return;
+            }
+            stats.groups.forEach(function (group) {
+                const card = Array.prototype.find.call(cards, function (node) {
+                    return node.dataset.group === String(group.group_id);
+                });
+                if (card) { updateCard(card, group); }
+            });
+            setLive(true, "live · " + stats.generated_at_str);
+        } catch (error) {
+            setLive(false, "нет связи");
+        }
+    }
+
+    function showConsole(message) {
+        const box = document.getElementById("wh-result");
+        if (!box) { return; }
+        box.hidden = false;
+        box.textContent = message;
+    }
+
+    async function webhookCall(button, method, url, label) {
+        const original = button.textContent;
+        button.disabled = true;
+        button.textContent = "…";
+        try {
+            const response = await fetch(url, { method: method, headers: { Accept: "application/json" } });
+            let body = await response.text();
+            try { body = JSON.stringify(JSON.parse(body), null, 2); } catch (error) { /* не JSON */ }
+            showConsole("[" + label + "] HTTP " + response.status + "\n" + body);
+        } catch (error) {
+            showConsole("[" + label + "] ошибка: " + error.message);
+        } finally {
+            button.disabled = false;
+            button.textContent = original;
+        }
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        document.querySelectorAll("[data-group-card]").forEach(function (card) {
+            updateCard(card, {
+                text: Number(card.dataset.text),
+                photo: Number(card.dataset.photo),
+                scheduled: Number(card.dataset.scheduled),
+                banwords: Number(card.querySelector('[data-field="banwords"]').textContent.replace(/\D/g, "")) || 0,
+                use_count: Number(card.querySelector('[data-field="use_count"]').textContent.replace(/\D/g, "")) || 0,
+                users: Number(card.querySelector('[data-field="users_count"]').textContent.replace(/\D/g, "")) || 0
+            });
+        });
+
+        const statusButton = document.getElementById("wh-status");
+        const setupButton = document.getElementById("wh-setup");
+        if (statusButton) {
+            statusButton.addEventListener("click", function () {
+                webhookCall(statusButton, "GET", "/tgbot/status", "status");
+            });
+        }
+        if (setupButton) {
+            setupButton.addEventListener("click", function () {
+                if (confirm("Переустановить вебхук Telegram? Обновления в очереди будут сброшены.")) {
+                    webhookCall(setupButton, "POST", "/tgbot/setup", "setup");
+                }
+            });
+        }
+
+        refresh();
+        setInterval(function () {
+            if (!document.hidden) { refresh(); }
+        }, PERIOD);
+    });
+})();
+</script>
+{% endblock %}

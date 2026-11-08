@@ -533,6 +533,47 @@ class DataBaseManager:
             )
             conn.commit()
 
+    # --- АДМИН-ПАНЕЛЬ ---
+    def get_groups(self) -> List[int]:
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            rows = conn.execute("SELECT tg_group_id FROM groups ORDER BY tg_group_id").fetchall()
+            return [r[0] for r in rows]
+
+    def get_comments_with_ids(self, group_id: int) -> List[Dict[str, Any]]:
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, group_id, comment_type, comment_text, scheduled_date, use_count
+                FROM comments
+                WHERE group_id=?
+                ORDER BY id
+                """,
+                (group_id,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def delete_comment_by_id(self, comment_id: int, group_id: Optional[int] = None) -> bool:
+        query = "DELETE FROM comments WHERE id=?"
+        params: List[Any] = [comment_id]
+        if group_id is not None:
+            query += " AND group_id=?"
+            params.append(group_id)
+
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            res = conn.execute(query, tuple(params))
+            conn.commit()
+            return res.rowcount > 0
+
+    def delete_banword(self, group_id: int, pattern: str) -> bool:
+        with closing(sqlite3.connect(self.db_file, timeout=config.DB_CONNECTION_TIMEOUT)) as conn:
+            res = conn.execute(
+                "DELETE FROM banwords WHERE group_id=? AND pattern=?",
+                (group_id, pattern),
+            )
+            conn.commit()
+            return res.rowcount > 0
+
     def admin_msg_rate_hit(self, ip: str) -> bool:
         """Фиксирует запрос с IP. True — лимит превышен, запрос нужно отклонить."""
         now = time.time()

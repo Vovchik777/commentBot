@@ -1,9 +1,9 @@
-from functools import wraps
 import hmac
-from flask import Flask, Response, request, jsonify, render_template
+from flask import Flask, request, jsonify, render_template
 from src.config import Config
 from src.bot.core import TelegramBot
-
+from src.web.auth import require_admin
+from src.web.admin import admin
 from src.shared.logger import get_bot_logger
 
 logger = get_bot_logger()
@@ -11,35 +11,15 @@ logger = get_bot_logger()
 
 app = Flask(__name__, template_folder="web/templates")
 
-
 config = Config()
 config.validate()
+app.extensions["config"] = config
+
+app.register_blueprint(admin)
 
 
 bot = TelegramBot(config)
-
-ADMIN_USER = config.ADMIN_USER
-ADMIN_PASS = config.ADMIN_PASS
-
-
-def require_admin(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        auth = request.authorization
-
-        # Если учётные данные не переданы вообще → вызываем попап
-        if not auth:
-            return Response("Доступ защищён", 401, {"WWW-Authenticate": 'Basic realm="Admin Area"'})
-
-        username = (auth.username or "").encode()
-        password = (auth.password or "").encode()
-        ok = hmac.compare_digest(username, ADMIN_USER.encode())
-        if not ok or not hmac.compare_digest(password, ADMIN_PASS.encode()):
-            return Response("Доступ запрещён: неверный логин или пароль", 403)
-
-        return f(*args, **kwargs)
-
-    return wrapper
+app.extensions["bot"] = bot
 
 
 @app.route("/tgbot/webhook", methods=["POST"])
@@ -94,10 +74,13 @@ def setup_webhook():
 
     except requests.exceptions.Timeout:
         logger.error("Таймаут запроса к апи тг")
-        return jsonify({"ok" : False,
-                        "error_code": 504,
-                        "description" : f"Gateway Timeout: Telegram API didn`t respond at {config.TG_API_REQUEST_TIMEOUT} sec"
-                        })
+        return jsonify(
+            {
+                "ok": False,
+                "error_code": 504,
+                "description": f"Gateway Timeout: Telegram API didn`t respond at {config.TG_API_REQUEST_TIMEOUT} sec",
+            }
+        )
 
     except Exception as e:
         logger.error(f"ошибка при запросе к апи тг {e}")
@@ -108,13 +91,9 @@ def setup_webhook():
             except ValueError:
                 pass
 
-        return jsonify({
-            "ok": False,
-            "error_code": 502,
-            "description": f"Bad Gateway: {str(e)}"
-        }), 502
-
-
+        return jsonify(
+            {"ok": False, "error_code": 502, "description": f"Bad Gateway: {str(e)}"}
+        ), 502
 
 
 @app.route("/tgbot/status", methods=["GET"])

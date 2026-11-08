@@ -90,7 +90,9 @@ def test_register_twice_reports_already_registered(env):
 def test_register_anonymous_admin_gets_generated_username(env):
     bot, handler = env
 
-    handler.handle_register(make_message(GROUP, 1087968824, "/register", username="GroupAnonymousBot"))
+    handler.handle_register(
+        make_message(GROUP, 1087968824, "/register", username="GroupAnonymousBot")
+    )
 
     user = bot.db.get_user(1087968824, GROUP)
     assert user.username.startswith("AnonymousAdmin_")
@@ -171,9 +173,15 @@ def test_schedule_comment_accepts_future_and_rejects_past(env):
         "%Y-%m-%d"
     )
 
-    handler.handle_set_schedule_comment(make_message(GROUP, 1, f"/set_schedule_comment {future} план"))
-    handler.handle_set_schedule_comment(make_message(GROUP, 1, "/set_schedule_comment 2020-01-01 старое"))
-    handler.handle_set_schedule_comment(make_message(GROUP, 1, "/set_schedule_comment завтра текст"))
+    handler.handle_set_schedule_comment(
+        make_message(GROUP, 1, f"/set_schedule_comment {future} план")
+    )
+    handler.handle_set_schedule_comment(
+        make_message(GROUP, 1, "/set_schedule_comment 2020-01-01 старое")
+    )
+    handler.handle_set_schedule_comment(
+        make_message(GROUP, 1, "/set_schedule_comment завтра текст")
+    )
 
     assert f"добавлен на дату {future}" in bot.texts[-3]
     assert "Дата должна быть строго" in bot.texts[-2]
@@ -197,8 +205,12 @@ def test_answer_ignores_other_chats(env):
 def test_answer_reports_missing_log_and_missing_text(env):
     bot, handler = env
 
-    handler.handle_answer({**make_message(LOGGER_CHAT, 1, "/answer"), "reply_to_message": {"message_id": 900}})
-    handler.handle_answer({**make_message(LOGGER_CHAT, 1, "/answer текст"), "reply_to_message": {"message_id": 901}})
+    handler.handle_answer(
+        {**make_message(LOGGER_CHAT, 1, "/answer"), "reply_to_message": {"message_id": 900}}
+    )
+    handler.handle_answer(
+        {**make_message(LOGGER_CHAT, 1, "/answer текст"), "reply_to_message": {"message_id": 901}}
+    )
 
     assert len(bot.texts) == 2
     assert all("не найдено в логах" in t for t in bot.texts)

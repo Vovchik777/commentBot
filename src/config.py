@@ -38,7 +38,7 @@ class Config:
 
     @classmethod
     # @staticmethod
-    def validate(cls, scope = "web"):
+    def validate(cls, scope="web"):
 
         config = cls()
         required = ["BOT_TOKEN", "LOGGER_CHAT_ID"]

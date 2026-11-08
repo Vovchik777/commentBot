@@ -1,0 +1,100 @@
+{% extends "admin_base.html" %}
+{% block title %}Логи{% endblock %}
+{% block crumbs %}admin / логи{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Логи сообщений</h1>
+        <p>Таблица <span class="mono">message_logs</span> — последние {{ max_rows }} записей за 24 часа.</p>
+    </div>
+    <div class="toolbar">
+        <label class="check"><input type="checkbox" id="logs-live" checked> автообновление</label>
+        <span class="live" id="logs-badge"><span class="dot"></span><span id="logs-live-text">live</span></span>
+    </div>
+</div>
+
+<article class="card">
+    <div class="card-head">
+        <div>
+            <h2>Записи</h2>
+            <span class="muted">источник для команды <span class="mono">/answer</span></span>
+        </div>
+        <span class="pill">{{ rows | length }}</span>
+    </div>
+    {% if not rows %}
+    <div class="empty" id="logs-empty">Пока пусто — бот ещё не пересылал сообщения.</div>
+    {% endif %}
+    <div class="table-wrap" id="logs-wrap" {% if not rows %}style="display: none;"{% endif %}>
+        <table>
+            <thead><tr><th>Время</th><th>Chat ID</th><th>Bot message ID</th><th>Текст</th></tr></thead>
+            <tbody id="logs-body">
+                {% for row in rows %}
+                <tr>
+                    <td class="muted" style="white-space: nowrap;">{{ row.time }}</td>
+                    <td class="mono">{{ row.chat_id }}</td>
+                    <td class="mono">{{ row.bot_message_id }}</td>
+                    <td class="mono" style="max-width: 520px;">{{ row.text }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</article>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const PERIOD = 5000;
+    const body = document.getElementById("logs-body");
+    const wrap = document.getElementById("logs-wrap");
+    const empty = document.getElementById("logs-empty");
+    const toggle = document.getElementById("logs-live");
+    const badge = document.getElementById("logs-badge");
+    const label = document.getElementById("logs-live-text");
+
+    function render(rows) {
+        if (!rows.length) {
+            body.innerHTML = "";
+            if (wrap) { wrap.style.display = "none"; }
+            if (empty) { empty.style.display = ""; }
+            return;
+        }
+        if (empty) { empty.style.display = "none"; }
+        if (wrap) { wrap.style.display = ""; }
+        body.innerHTML = rows.map(function (row) {
+            return "<tr>" +
+                '<td class="muted" style="white-space: nowrap;">' + window.adminEsc(row.time) + "</td>" +
+                '<td class="mono">' + window.adminEsc(row.chat_id) + "</td>" +
+                '<td class="mono">' + window.adminEsc(row.bot_message_id) + "</td>" +
+                '<td class="mono" style="max-width: 520px;">' + window.adminEsc(row.text) + "</td>" +
+                "</tr>";
+        }).join("");
+    }
+
+    function setLive(ok, text) {
+        if (label) { label.textContent = text; }
+        if (badge) {
+            badge.classList.toggle("live--off", !ok);
+            const dot = badge.querySelector(".dot");
+            if (dot) { dot.classList.toggle("dot--off", !ok); }
+        }
+    }
+
+    async function refresh() {
+        try {
+            const payload = await window.adminGetJSON("{{ url_for('admin.api_logs') }}");
+            render(payload.rows || []);
+            setLive(true, "live · " + payload.generated_at_str);
+        } catch (error) {
+            setLive(false, "нет связи");
+        }
+    }
+
+    refresh();
+    setInterval(function () {
+        if (!document.hidden && (!toggle || toggle.checked)) { refresh(); }
+    }, PERIOD);
+})();
+</script>
+{% endblock %}

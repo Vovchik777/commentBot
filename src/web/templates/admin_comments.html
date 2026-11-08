@@ -1,0 +1,166 @@
+{% extends "admin_base.html" %}
+{% block title %}Комментарии{% endblock %}
+{% block crumbs %}admin / комментарии{% endblock %}
+{% block content %}
+<div class="page-head">
+    <div>
+        <h1>Комментарии</h1>
+        <p>Шаблоны для автоподстановки в группах и отложенные публикации.</p>
+    </div>
+</div>
+
+{% if group_id is none %}
+<div class="card empty">В базе ещё нет групп.</div>
+{% else %}
+<div class="group-switch">
+    {% for g in groups %}
+    <a href="{{ url_for('admin.comments_page', group=g) }}" class="{{ 'active' if g == group_id else '' }}">{{ g }}</a>
+    {% endfor %}
+</div>
+
+<article class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+        <div>
+            <h2>Добавить комментарий</h2>
+            <span class="muted">плейсхолдеры: {% raw %}{{name}}, {{address}}, {{phone_number}}, {{company}}{% endraw %}</span>
+        </div>
+    </div>
+    <form method="post" action="{{ url_for('admin.add_comment') }}">
+        <input type="hidden" name="group" value="{{ group_id }}">
+        <div class="form-row">
+            <div class="field">
+                <label for="type">Тип</label>
+                <select name="type" id="type">
+                    {% for t in comment_types %}
+                    <option value="{{ t }}">{{ t }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="field" id="date-field" style="display: none;">
+                <label for="scheduled_date">Дата (не раньше {{ today }})</label>
+                <input type="date" name="scheduled_date" id="scheduled_date" min="{{ today }}">
+            </div>
+            <div class="field field--wide">
+                <label for="text">Текст</label>
+                <textarea name="text" id="text" required placeholder="Текст, который бот отправит в группу…"></textarea>
+            </div>
+        </div>
+        <button type="submit">Добавить</button>
+    </form>
+</article>
+
+<article class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+        <h2>Текстовые</h2>
+        <span class="pill">{{ text_comments | length }}</span>
+    </div>
+    {% if not text_comments %}
+    <div class="empty">Пусто.</div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>#</th><th>Текст</th><th>Использован</th><th></th></tr></thead>
+            <tbody>
+                {% for c in text_comments %}
+                <tr>
+                    <td class="muted">{{ loop.index }}</td>
+                    <td class="mono">{{ c.comment_text }}</td>
+                    <td>{{ c.use_count }}</td>
+                    <td style="text-align: right;">
+                        <form method="post" action="{{ url_for('admin.delete_comment') }}">
+                            <input type="hidden" name="group" value="{{ group_id }}">
+                            <input type="hidden" name="comment_id" value="{{ c.id }}">
+                            <button type="submit" class="danger small" onclick="return confirm('Удалить этот комментарий?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+
+<article class="card" style="margin-bottom: 16px;">
+    <div class="card-head">
+        <h2>Фото</h2>
+        <span class="pill">{{ photo_comments | length }}</span>
+    </div>
+    {% if not photo_comments %}
+    <div class="empty">Пусто. Файл фото хранится как текст (file_id или ссылка).</div>
+    {% else %}
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>#</th><th>Данные</th><th>Использован</th><th></th></tr></thead>
+            <tbody>
+                {% for c in photo_comments %}
+                <tr>
+                    <td class="muted">{{ loop.index }}</td>
+                    <td class="mono">{{ c.comment_text }}</td>
+                    <td>{{ c.use_count }}</td>
+                    <td style="text-align: right;">
+                        <form method="post" action="{{ url_for('admin.delete_comment') }}">
+                            <input type="hidden" name="group" value="{{ group_id }}">
+                            <input type="hidden" name="comment_id" value="{{ c.id }}">
+                            <button type="submit" class="danger small" onclick="return confirm('Удалить этот фото-комментарий?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</article>
+
+<article class="card">
+    <div class="card-head">
+        <h2>Запланированные</h2>
+        <span class="pill">{{ scheduled.values() | map('length') | sum }}</span>
+    </div>
+    {% if not scheduled %}
+    <div class="empty">Пусто.</div>
+    {% else %}
+    {% for date, items in scheduled | dictsort %}
+    <h2 style="margin: 16px 0 10px; color: var(--muted); font-size: 13px;">{{ date }}</h2>
+    <div class="table-wrap">
+        <table>
+            <thead><tr><th>#</th><th>Текст</th><th>Использован</th><th></th></tr></thead>
+            <tbody>
+                {% for c in items %}
+                <tr>
+                    <td class="muted">{{ loop.index }}</td>
+                    <td class="mono">{{ c.comment_text }}</td>
+                    <td>{{ c.use_count }}</td>
+                    <td style="text-align: right;">
+                        <form method="post" action="{{ url_for('admin.delete_comment') }}">
+                            <input type="hidden" name="group" value="{{ group_id }}">
+                            <input type="hidden" name="comment_id" value="{{ c.id }}">
+                            <button type="submit" class="danger small" onclick="return confirm('Удалить этот запланированный комментарий?')">Удалить</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+    {% endif %}
+</article>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const typeSelect = document.getElementById("type");
+    const dateField = document.getElementById("date-field");
+    if (!typeSelect || !dateField) { return; }
+    function toggle() {
+        dateField.style.display = typeSelect.value === "scheduled" ? "flex" : "none";
+    }
+    typeSelect.addEventListener("change", toggle);
+    toggle();
+});
+</script>
+{% endblock %}
