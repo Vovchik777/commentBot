@@ -19,7 +19,7 @@ from src.web.auth import _forbidden, _unauthorized, get_config, is_admin_request
 
 logger = get_bot_logger()
 
-admin = Blueprint("admin", __name__, url_prefix="tgbot/admin")
+admin = Blueprint("admin", __name__, url_prefix="/tgbot/admin")
 
 MAX_LOG_ROWS = 200
 ACTIVITY_HOURS = 24
