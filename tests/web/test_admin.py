@@ -44,19 +44,19 @@ USER_ID = 777
 
 
 def test_requires_auth(client):
-    resp = client.get("/admin/")
+    resp = client.get("tgbot/admin/")
     assert resp.status_code == 401
 
 
 def test_dashboard_empty(client):
-    resp = client.get("/admin/", auth=AUTH)
+    resp = client.get("tgbot/admin/", auth=AUTH)
     assert resp.status_code == 200
     assert "В базе ещё нет групп" in resp.data.decode("utf-8")
 
 
 def test_dashboard_with_group(client, db, user_factory):
     db.add_user(user_factory(tg_group_id=GROUP_ID, tg_user_id=USER_ID))
-    resp = client.get("/admin/", auth=AUTH)
+    resp = client.get("tgbot/admin/", auth=AUTH)
     assert resp.status_code == 200
     assert str(GROUP_ID) in resp.data.decode("utf-8")
 
@@ -70,12 +70,12 @@ def test_users_page_and_change_permission(client, db):
             permission=PermissionLevel.BASE,
         )
     )
-    resp = client.get("/admin/users", auth=AUTH)
+    resp = client.get("tgbot/admin/users", auth=AUTH)
     assert resp.status_code == 200
     assert "@vasya" in resp.data.decode("utf-8")
 
     resp = client.post(
-        "/admin/users/permission",
+        "tgbot/admin/users/permission",
         data={"group": GROUP_ID, "user": USER_ID, "permission": PermissionLevel.MODER.value},
         auth=AUTH,
         follow_redirects=True,
@@ -88,7 +88,7 @@ def test_users_page_and_change_permission(client, db):
 def test_change_permission_invalid_level(client, db, user_factory):
     db.add_user(user_factory(tg_group_id=GROUP_ID, tg_user_id=USER_ID))
     resp = client.post(
-        "/admin/users/permission",
+        "tgbot/admin/users/permission",
         data={"group": GROUP_ID, "user": USER_ID, "permission": 99},
         auth=AUTH,
         follow_redirects=True,
@@ -100,7 +100,7 @@ def test_change_permission_invalid_level(client, db, user_factory):
 def test_delete_user(client, db, user_factory):
     db.add_user(user_factory(tg_group_id=GROUP_ID, tg_user_id=USER_ID))
     resp = client.post(
-        "/admin/users/delete",
+        "tgbot/admin/users/delete",
         data={"group": GROUP_ID, "user": USER_ID},
         auth=AUTH,
         follow_redirects=True,
@@ -110,11 +110,11 @@ def test_delete_user(client, db, user_factory):
 
 
 def test_comments_add_and_delete(client, db):
-    resp = client.get("/admin/comments", auth=AUTH)
+    resp = client.get("tgbot/admin/comments", auth=AUTH)
     assert resp.status_code == 200
 
     resp = client.post(
-        "/admin/comments/add",
+        "tgbot/admin/comments/add",
         data={"group": GROUP_ID, "type": "text", "text": "Привет {{name}}"},
         auth=AUTH,
         follow_redirects=True,
@@ -125,7 +125,7 @@ def test_comments_add_and_delete(client, db):
     assert comments[0]["comment_text"] == "Привет {{name}}"
 
     resp = client.post(
-        "/admin/comments/delete",
+        "tgbot/admin/comments/delete",
         data={"group": GROUP_ID, "comment_id": comments[0]["id"]},
         auth=AUTH,
         follow_redirects=True,
@@ -137,7 +137,7 @@ def test_comments_add_and_delete(client, db):
 def test_comments_duplicate_rejected(client, db):
     for _ in range(2):
         resp = client.post(
-            "/admin/comments/add",
+            "tgbot/admin/comments/add",
             data={"group": GROUP_ID, "type": "text", "text": "дубль"},
             auth=AUTH,
             follow_redirects=True,
@@ -148,7 +148,7 @@ def test_comments_duplicate_rejected(client, db):
 
 def test_comments_add_empty_text_rejected(client, db):
     resp = client.post(
-        "/admin/comments/add",
+        "tgbot/admin/comments/add",
         data={"group": GROUP_ID, "type": "text", "text": "   "},
         auth=AUTH,
         follow_redirects=True,
@@ -161,7 +161,7 @@ def test_comments_scheduled_requires_future_date(client, db):
     today = date.fromisoformat(get_moscow_date())
     past = (today - timedelta(days=1)).isoformat()
     resp = client.post(
-        "/admin/comments/add",
+        "tgbot/admin/comments/add",
         data={"group": GROUP_ID, "type": "scheduled", "text": "завтрашний", "scheduled_date": past},
         auth=AUTH,
         follow_redirects=True,
@@ -173,7 +173,7 @@ def test_comments_scheduled_requires_future_date(client, db):
 def test_comments_scheduled_ok(client, db):
     future = (date.fromisoformat(get_moscow_date()) + timedelta(days=3)).isoformat()
     resp = client.post(
-        "/admin/comments/add",
+        "tgbot/admin/comments/add",
         data={
             "group": GROUP_ID,
             "type": "scheduled",
@@ -191,7 +191,7 @@ def test_comments_scheduled_ok(client, db):
 
 def test_banwords_add_invalid_regex(client, db):
     resp = client.post(
-        "/admin/banwords/add",
+        "tgbot/admin/banwords/add",
         data={"group": GROUP_ID, "pattern": "([несбалансирована", "reply": "стоп"},
         auth=AUTH,
         follow_redirects=True,
@@ -201,11 +201,11 @@ def test_banwords_add_invalid_regex(client, db):
 
 
 def test_banwords_add_and_delete(client, db):
-    resp = client.get("/admin/banwords", auth=AUTH)
+    resp = client.get("tgbot/admin/banwords", auth=AUTH)
     assert resp.status_code == 200
 
     resp = client.post(
-        "/admin/banwords/add",
+        "tgbot/admin/banwords/add",
         data={"group": GROUP_ID, "pattern": "казино", "reply": "Реклама запрещена"},
         auth=AUTH,
         follow_redirects=True,
@@ -216,7 +216,7 @@ def test_banwords_add_and_delete(client, db):
     assert banwords[0].pattern == "казино"
 
     resp = client.post(
-        "/admin/banwords/delete",
+        "tgbot/admin/banwords/delete",
         data={"group": GROUP_ID, "pattern": "казино"},
         auth=AUTH,
         follow_redirects=True,
@@ -226,13 +226,13 @@ def test_banwords_add_and_delete(client, db):
 
 
 def test_wrong_password_returns_403(client):
-    resp = client.get("/admin/", auth=("admin", "wrong"))
+    resp = client.get("tgbot/admin/", auth=("admin", "wrong"))
     assert resp.status_code == 403
 
 
 def test_foreign_origin_post_rejected(client, db):
     resp = client.post(
-        "/admin/banwords/add",
+        "tgbot/admin/banwords/add",
         data={"group": GROUP_ID, "pattern": "казино", "reply": "нет"},
         headers={"Origin": "https://evil.example"},
         auth=AUTH,
@@ -243,7 +243,7 @@ def test_foreign_origin_post_rejected(client, db):
 
 def test_same_origin_post_allowed(client, db):
     resp = client.post(
-        "/admin/banwords/add",
+        "tgbot/admin/banwords/add",
         data={"group": GROUP_ID, "pattern": "казино", "reply": "нет"},
         headers={"Origin": "http://localhost"},
         auth=AUTH,
@@ -259,7 +259,7 @@ def test_comment_from_other_group_not_deleted(client, db):
     comment_id = db.get_comments_with_ids(GROUP_ID)[0]["id"]
 
     resp = client.post(
-        "/admin/comments/delete",
+        "tgbot/admin/comments/delete",
         data={"group": GROUP_ID + 1, "comment_id": comment_id},
         auth=AUTH,
         follow_redirects=True,
@@ -274,7 +274,7 @@ def test_banword_delete_invalidates_cache(client, db):
     assert db.get_banwords_cache(GROUP_ID) is not None
 
     resp = client.post(
-        "/admin/banwords/delete",
+        "tgbot/admin/banwords/delete",
         data={"group": GROUP_ID, "pattern": "казино"},
         auth=AUTH,
         follow_redirects=True,
@@ -284,14 +284,14 @@ def test_banword_delete_invalidates_cache(client, db):
 
 
 def test_logs_page_empty(client):
-    resp = client.get("/admin/logs", auth=AUTH)
+    resp = client.get("tgbot/admin/logs", auth=AUTH)
     assert resp.status_code == 200
     assert "Пока пусто" in resp.data.decode("utf-8")
 
 
 def test_logs_page_shows_entries(client, admin_app):
     admin_app.extensions["bot"].logs_manager.add_message_log(11, GROUP_ID, 22, "текст лога")
-    resp = client.get("/admin/logs", auth=AUTH)
+    resp = client.get("tgbot/admin/logs", auth=AUTH)
     body = resp.data.decode("utf-8")
     assert resp.status_code == 200
     assert "текст лога" in body
@@ -300,7 +300,7 @@ def test_logs_page_shows_entries(client, admin_app):
 
 def test_api_stats(client, db, user_factory):
     db.add_user(user_factory(tg_group_id=GROUP_ID, tg_user_id=USER_ID))
-    resp = client.get("/admin/api/stats", auth=AUTH)
+    resp = client.get("tgbot/admin/api/stats", auth=AUTH)
     assert resp.status_code == 200
     payload = resp.get_json()
     assert payload["totals"]["groups"] == 1
@@ -311,7 +311,7 @@ def test_api_stats(client, db, user_factory):
 
 def test_api_logs(client, admin_app):
     admin_app.extensions["bot"].logs_manager.add_message_log(5, GROUP_ID, 6, "привет")
-    resp = client.get("/admin/api/logs", auth=AUTH)
+    resp = client.get("tgbot/admin/api/logs", auth=AUTH)
     assert resp.status_code == 200
     payload = resp.get_json()
     assert len(payload["rows"]) == 1
@@ -324,7 +324,7 @@ def test_export_json(client, db, user_factory, admin_app):
     db.add_banword(GROUP_ID, "казино", "нет")
     admin_app.extensions["bot"].logs_manager.add_message_log(1, GROUP_ID, 2, "лог")
 
-    resp = client.get("/admin/export.json", auth=AUTH)
+    resp = client.get("tgbot/admin/export.json", auth=AUTH)
     assert resp.status_code == 200
     assert "attachment" in resp.headers["Content-Disposition"]
     payload = resp.get_json()
