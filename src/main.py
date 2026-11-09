@@ -47,6 +47,8 @@ def _log_request(response):
 
     if log_cmd : log_cmd(log_message)
 
+    return response
+
 
     
 
