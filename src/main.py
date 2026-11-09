@@ -45,7 +45,7 @@ def _log_request(response):
         log_cmd = request_logger.info
 
 
-    log_cmd(log_message)
+    if log_cmd : log_cmd(log_message)
 
 
     
