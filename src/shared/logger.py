@@ -70,6 +70,8 @@ def _init_logger(
 def get_db_logger() -> logging.Logger:
     return _init_logger("commentBot.db", "logs/db.log")
 
+def get_requests_logger() -> logging.Logger:
+    return _init_logger("commentBot.requests", "logs/requests")
 
 def get_bot_logger() -> logging.Logger:
     return _init_logger("commentBot.bot", "logs/bot.log")

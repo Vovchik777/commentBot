@@ -1,12 +1,14 @@
 import hmac
-from flask import Flask, request, jsonify, render_template
+import time
+from flask import Flask, request, jsonify, render_template, g
 from src.config import Config
 from src.bot.core import TelegramBot
 from src.web.auth import require_admin
 from src.web.admin import admin
-from src.shared.logger import get_bot_logger
+from src.shared.logger import get_bot_logger, get_requests_logger
 
 logger = get_bot_logger()
+request_logger = get_requests_logger()
 
 
 app = Flask(__name__, template_folder="web/templates")
@@ -20,6 +22,33 @@ app.register_blueprint(admin)
 
 bot = TelegramBot(config)
 app.extensions["bot"] = bot
+
+@app.before_request1
+def _start_timer():
+    g.start_time = time.time()
+
+@app.after_request
+def _log_request(response):
+    if request.path == '/favicon.ico':
+        return response
+
+    now = time.time()
+    duration = round((now - g.get('start_time', now)) * 1000, 2)
+    endpoint = request.endpoint or "unknown"
+
+    log_message = f"[{request.remote_addr}] {request.method:<4} | {response.status_code} | {duration:>7}ms | {endpoint:<15} | {request.full_path.rstrip('?')}"
+    if response.status_code >= 500:
+        log_cmd = request_logger.error
+    elif duration > 7 * 1000:
+        log_cmd = request_logger.warning
+    else: 
+        log_cmd = request_logger.info
+
+
+    log_cmd(log_message)
+
+
+    
 
 
 @app.route("/tgbot/webhook", methods=["POST"])
