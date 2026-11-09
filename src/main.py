@@ -23,7 +23,7 @@ app.register_blueprint(admin)
 bot = TelegramBot(config)
 app.extensions["bot"] = bot
 
-@app.before_request1
+@app.before_request
 def _start_timer():
     g.start_time = time.time()
 
