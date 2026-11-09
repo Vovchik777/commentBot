@@ -78,6 +78,59 @@ def _selected_group(groups: List[int]) -> Optional[int]:
     return groups[0] if groups else None
 
 
+def _group_title(bot: Any, group_id: int) -> str:
+    """Название группы из getChat; пустая строка, если получить не удалось."""
+    get_info = getattr(bot, "get_chat_info", None)
+    if not callable(get_info):
+        return ""
+    info = get_info(group_id)
+    if isinstance(info, dict):
+        return str(info.get("title") or "").strip()
+    return str(info or "").strip()
+
+
+def _group_titles(bot: Any, group_ids: List[int]) -> Dict[int, str]:
+    return {group_id: _group_title(bot, group_id) for group_id in group_ids}
+
+
+CHAT_LABEL_TTL = 300
+_chat_labels_cache: Dict[int, tuple] = {}
+
+
+def _chat_label(bot: Any, chat_id: Any) -> str:
+    """Название чата (группа/канал) или имя пользователя; кэш на 5 минут."""
+    if chat_id is None:
+        return ""
+    key = (
+        int(chat_id)
+        if isinstance(chat_id, (int, str)) and str(chat_id).lstrip("-").isdecimal()
+        else 0
+    )
+    if key:
+        cached = _chat_labels_cache.get(key)
+        if cached and cached[0] > time.time():
+            return cached[1]
+
+    get_info = getattr(bot, "get_chat_info", None)
+    if not callable(get_info):
+        return ""
+    info = get_info(key or chat_id)
+    if isinstance(info, dict):
+        label = (
+            info.get("title")
+            or " ".join(filter(None, [info.get("first_name"), info.get("last_name")]))
+            or info.get("username")
+            or ""
+        )
+        label = str(label).strip()
+    else:
+        label = str(info or "").strip()
+
+    if key:
+        _chat_labels_cache[key] = (time.time() + CHAT_LABEL_TTL, label)
+    return label
+
+
 def _comments_payload(group_id: int) -> Dict[str, Any]:
     data = _bot().db.get_comments_list(group_id)
     scheduled = data.get("scheduled") or {}
@@ -98,6 +151,7 @@ def _collect_stats() -> Dict[str, Any]:
 
     groups: List[Dict[str, Any]] = []
     for group_id in db.get_groups():
+        title = _group_title(bot, group_id)
         users = db.get_users_in_group(group_id)
         comments = _comments_payload(group_id)
         banwords = db.get_banwords_list(group_id)
@@ -108,6 +162,7 @@ def _collect_stats() -> Dict[str, Any]:
         )
         groups.append(
             {
+                "title": title,
                 "group_id": group_id,
                 "users": len(users),
                 "text": len(comments["text"]),
@@ -167,10 +222,12 @@ def _logs_rows(limit: int = MAX_LOG_ROWS) -> List[Dict[str, Any]]:
     result = []
     for row in rows[:limit]:
         timestamp = row.get("timestamp") or 0
+        chat_id = row.get("chat_id")
         result.append(
             {
                 "bot_message_id": row.get("bot_message_id"),
-                "chat_id": row.get("chat_id"),
+                "chat_id": chat_id,
+                "chat_title": _chat_label(bot, chat_id),
                 "text": row.get("text") or "",
                 "timestamp": timestamp,
                 "time": datetime.fromtimestamp(timestamp, MOSCOW_TZ).strftime("%d.%m.%Y %H:%M:%S")
@@ -198,15 +255,18 @@ def dashboard():
 
 @admin.get("/users")
 def users_page():
-    db = _bot().db
+    bot = _bot()
+    db = bot.db
     groups = db.get_groups()
-    data = [(group_id, db.get_users_in_group(group_id)) for group_id in groups]
+    titles = _group_titles(bot, groups)
+    data = [(group_id, titles[group_id], db.get_users_in_group(group_id)) for group_id in groups]
     return render_template("admin_users.html", data=data, msg=request.args.get("msg", ""))
 
 
 @admin.get("/comments")
 def comments_page():
-    db = _bot().db
+    bot = _bot()
+    db = bot.db
     groups = db.get_groups()
     group_id = _selected_group(groups)
     text_comments: List[Comment] = []
@@ -221,6 +281,7 @@ def comments_page():
     return render_template(
         "admin_comments.html",
         groups=groups,
+        group_titles=_group_titles(bot, groups),
         group_id=group_id,
         comment_types=[comment_type.value for comment_type in CommentTypes],
         text_comments=text_comments,
@@ -232,13 +293,15 @@ def comments_page():
 
 @admin.get("/banwords")
 def banwords_page():
-    db = _bot().db
+    bot = _bot()
+    db = bot.db
     groups = db.get_groups()
     group_id = _selected_group(groups)
     banwords = db.get_banwords_list(group_id) if group_id is not None else []
     return render_template(
         "admin_banwords.html",
         groups=groups,
+        group_titles=_group_titles(bot, groups),
         group_id=group_id,
         banwords=banwords,
         msg=request.args.get("msg", ""),

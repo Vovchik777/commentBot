@@ -17,12 +17,12 @@
 <div class="card empty">В базе ещё нет групп.</div>
 {% endif %}
 
-{% for group_id, users in data %}
+{% for group_id, title, users in data %}
 <article class="card" style="margin-bottom: 16px;">
     <div class="card-head">
         <div>
             <h2>Группа {{ group_id }}</h2>
-            <span class="muted">telegram chat id</span>
+            <span class="muted">telegram chat id{% if title %} · {{ title }}{% endif %}</span>
         </div>
         <span class="pill pill--accent">{{ users | length }} участн.</span>
     </div>
@@ -34,7 +34,6 @@
             <thead>
                 <tr>
                     <th>Пользователь</th>
-                    <th>TG ID</th>
                     <th>Права</th>
                     <th></th>
                 </tr>
@@ -48,8 +47,8 @@
                         {% else %}
                         <span class="muted">без username</span>
                         {% endif %}
+                        <span class="muted mono">id {{ u.tg_user_id }}</span>
                     </td>
-                    <td class="mono">{{ u.tg_user_id }}</td>
                     <td>
                         <form method="post" action="{{ url_for('admin.change_permission') }}">
                             <input type="hidden" name="group" value="{{ group_id }}">
@@ -69,7 +68,7 @@
                             <input type="hidden" name="group" value="{{ group_id }}">
                             <input type="hidden" name="user" value="{{ u.tg_user_id }}">
                             <button type="submit" class="danger small"
-                                    onclick="return confirm('Удалить пользователя {{ u.tg_user_id }} из группы {{ group_id }}?')">
+                                    onclick="return confirm('Удалить пользователя {% if u.username %}@{{ u.username }}{% else %}id {{ u.tg_user_id }}{% endif %} из группы {{ group_id }}{% if title %} ({{ title }}){% endif %}?')">
                                 Удалить
                             </button>
                         </form>

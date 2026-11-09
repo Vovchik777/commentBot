@@ -100,7 +100,7 @@
         <div class="card-head">
             <div>
                 <h2>Группа {{ s.group_id }}</h2>
-                <span class="muted">telegram chat id</span>
+                <span class="muted">telegram chat id{% if s.title %} · {{ s.title }}{% endif %}</span>
             </div>
             <span class="pill pill--accent" data-field="users">{{ s.users }} участн.</span>
         </div>

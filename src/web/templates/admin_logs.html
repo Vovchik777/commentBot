@@ -31,7 +31,7 @@
                 {% for row in rows %}
                 <tr>
                     <td class="muted" style="white-space: nowrap;">{{ row.time }}</td>
-                    <td class="mono">{{ row.chat_id }}</td>
+                    <td class="mono">{{ row.chat_id }}{% if row.chat_title %} · {{ row.chat_title }}{% endif %}</td>
                     <td class="mono">{{ row.bot_message_id }}</td>
                     <td class="mono" style="max-width: 520px;">{{ row.text }}</td>
                 </tr>
@@ -65,7 +65,8 @@
         body.innerHTML = rows.map(function (row) {
             return "<tr>" +
                 '<td class="muted" style="white-space: nowrap;">' + window.adminEsc(row.time) + "</td>" +
-                '<td class="mono">' + window.adminEsc(row.chat_id) + "</td>" +
+                '<td class="mono">' + window.adminEsc(row.chat_id) +
+                (row.chat_title ? " · " + window.adminEsc(row.chat_title) : "") + "</td>" +
                 '<td class="mono">' + window.adminEsc(row.bot_message_id) + "</td>" +
                 '<td class="mono" style="max-width: 520px;">' + window.adminEsc(row.text) + "</td>" +
                 "</tr>";

@@ -14,7 +14,7 @@
 {% else %}
 <div class="group-switch">
     {% for g in groups %}
-    <a href="{{ url_for('admin.banwords_page', group=g) }}" class="{{ 'active' if g == group_id else '' }}">{{ g }}</a>
+    <a href="{{ url_for('admin.banwords_page', group=g) }}" class="{{ 'active' if g == group_id else '' }}">{{ g }}{% if group_titles.get(g) %} · {{ group_titles.get(g) }}{% endif %}</a>
     {% endfor %}
 </div>
 
